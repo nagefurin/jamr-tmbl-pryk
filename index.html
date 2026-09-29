@@ -281,6 +281,8 @@
               <div class="opt-row"><span class="opt-label">WebSocket URL</span><input id="optOcrUrl" class="opt-input" style="max-width:260px" value="ws://127.0.0.1:7331"></div>
               <div class="opt-row"><span class="opt-label">Auto OCR on page load</span><label class="toggle-switch"><input id="optAutoOcr" type="checkbox"><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">Remember OCR between pages</span><label class="toggle-switch"><input id="optCacheOcr" type="checkbox" checked><span class="toggle-slider"></span></label></div>
+              <div class="opt-row"><span class="opt-label">Auto OCR preload images</span><input id="optOcrPreloadImages" class="opt-input" style="width:80px" type="number" min="0" max="20" step="1" value="2"></div>
+              <div class="opt-hint">When Auto OCR is enabled, preload this many image files ahead. The count is source images, not displayed pages; default is 2 in both Single and Dual Page modes.</div>
               <div class="opt-row"><span class="opt-label">Two-pass OCR</span><select id="optOcrTwoPass" class="opt-input" style="max-width:220px"><option value="off">Off</option><option value="owocr">Two-pass OCR (OwOCR → OwOCR)</option><option value="mangaocr">Two-pass OCR MangaOCR (OwOCR → 7441)</option></select></div>
               <div class="opt-row"><span class="opt-label">MangaOCR WebSocket URL</span><input id="optMangaOcrUrl" class="opt-input" style="max-width:260px" value="ws://127.0.0.1:7441"></div>
               <div class="opt-hint">Works with <code>owocr -r websocket -w websocket -of json -wp 7331</code>.</div>
@@ -401,7 +403,7 @@
       snapDouble:true, publisherCombinedDetect:true, floatyMode:false, zoomLevel:175,
       ankiField:'Picture', ankiMiscField:'MiscInfo', ankiSentenceField:'', ankiSentenceEnabled:false, ankiTagType:'doujinshi', ankiTagCustom:'',
       ankiTagEnabled:true, ankiResize:true, nsfwTag:true, infoField:true, combineDual:true, webpQuality:80, ankiAvif:false, avifCrf:42, avifSpeed:0,
-      ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrDisplay:1, ocrDebug:false, ocrBackground:'black',
+      ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrPreloadImages:2, ocrDisplay:1, ocrDebug:false, ocrBackground:'black',
       ocrGroupLines:true, ocrGroupGap:2, ocrRotation:true, ocrGeometry:'auto', ocrFontFamily:'BIZ UDMincho', ocrScale:100, ocrMaxFont:54,
       txWsUrl:'ws://127.0.0.1:6677', txFontSize:50, txAlign:'center', txFontFamily:'BIZ UDMincho', txReversed:false
     };
@@ -657,19 +659,19 @@
         this.cfg=cfg; this.ws=null; this.url=''; this.queue=Promise.resolve(); this.onState=onState; this.connectedPromise=null;
       }
       close(){ try{this.ws?.close();}catch{} this.ws=null; this.url=''; this.connectedPromise=null; }
-      async connect(){
+      async connect(silent=false){
         const url=this.cfg.get('ocrUrl');
         if(this.ws?.readyState===WebSocket.OPEN&&this.url===url) return;
         if(this.connectedPromise) return this.connectedPromise;
         this.close();
-        this.onState?.('loading',`Connecting to OwOCR at ${url}…`);
+        if(!silent)this.onState?.('loading',`Connecting to OwOCR at ${url}…`);
         this.connectedPromise=new Promise((resolve,reject)=>{
           let settled=false;
           const s=new WebSocket(url);
           s.binaryType='arraybuffer';
           const timer=setTimeout(()=>{ if(settled)return; settled=true; try{s.close();}catch{}; reject(new Error(`OwOCR connection timeout: ${url}`)); },7000);
           s.onopen=()=>{
-            if(settled)return; settled=true; clearTimeout(timer); this.ws=s; this.url=url; this.onState?.('success','OwOCR connected · click OCR text to select a sentence'); resolve();
+            if(settled)return; settled=true; clearTimeout(timer); this.ws=s; this.url=url; if(!silent)this.onState?.('success','OwOCR connected · click OCR text to select a sentence'); resolve();
           };
           s.onerror=()=>{ if(settled)return; settled=true; clearTimeout(timer); reject(new Error(`Cannot connect to OwOCR at ${url}`)); };
           s.onclose=()=>{ if(!settled)return; if(this.ws===s)this.ws=null; };
@@ -677,13 +679,14 @@
         await this.connectedPromise;
         this.connectedPromise=null;
       }
-      request(buf){
-        const run=async()=>{await this.connect();return this._requestNow(buf);};
+      request(buf,options={}){
+        const silent=!!options.silent;
+        const run=async()=>{await this.connect(silent);return this._requestNow(buf,silent);};
         const p=this.queue.then(run,run);
         this.queue=p.catch(()=>{});
         return p;
       }
-      _requestNow(buf){
+      _requestNow(buf,silent=false){
         return new Promise((resolve,reject)=>{
           const ws=this.ws;
           if(!ws||ws.readyState!==WebSocket.OPEN) return reject(new Error('OwOCR WebSocket is not open'));
@@ -708,7 +711,7 @@
             if(e.data instanceof Blob){e.data.text().then(handleText).catch(()=>{});}
           };
           ws.addEventListener('message',onMessage); ws.addEventListener('close',onClose); ws.addEventListener('error',onError);
-          try{ ws.send(buf); this.onState?.('loading',`OwOCR image sent${ack?'':' · waiting for OCR'}…`); }catch(e){finish(reject,e);}
+          try{ ws.send(buf); if(!silent)this.onState?.('loading',`OwOCR image sent${ack?'':' · waiting for OCR'}…`); }catch(e){finish(reject,e);}
         });
       }
     }
@@ -1181,7 +1184,7 @@
       getSelectedSentence(){return this.overlay.getSelectedSentence();}
       cycleDisplay(){const n=(this.cfg.get('ocrDisplay')+1)%3;this.cfg.set('ocrDisplay',n);if(this.has())this.overlay.refreshModes(this.renderer.frame);toast(`OCR: ${OCR_LABELS[n]}`);}
       toggle(){if(this.has()){this.clear();return;}this.processCurrent();}
-      preloadPageCount(){return this.cfg.get('dualMode')?4:2;}
+      preloadImageCount(){return clamp(Number(this.cfg.get('ocrPreloadImages')??2),0,20);}
       visiblePageCount(){
         if(!this.cfg.get('dualMode')||this.cfg.get('scrollMode')||!this.loader?.count)return 1;
         const i=this.nav?.idx??0,total=this.loader.count;
@@ -1189,7 +1192,7 @@
       }
       async preloadAhead(gen=this.generation){
         if(!this.cfg.get('autoOcr')||this.cfg.get('scrollMode')||gen!==this.generation||!this.loader?.count)return;
-        const total=this.loader.count,i=Math.max(0,this.nav?.idx??0),start=i+this.visiblePageCount(),count=this.preloadPageCount();
+        const total=this.loader.count,i=Math.max(0,this.nav?.idx??0),start=i+this.visiblePageCount(),count=this.preloadImageCount();
         if(start>=total)return;
         const mode=this.cfg.get('ocrTwoPass')||'off';
         for(let page=start;page<Math.min(total,start+count);page++){
@@ -1239,7 +1242,7 @@
         if(gen!==this.generation||(!silent&&!document.body.contains(img)))return null;
         const buf=await this.toBuffer(img,silent);
         let first;
-        try{first=await this.client.request(buf)}catch(e){console.error(e);if(!silent)this.status('error',e.message);return null;}
+        try{first=await this.client.request(buf,{silent})}catch(e){console.error(e);if(!silent)this.status('error',e.message);return null;}
         if(mode==='off')return first;
         try{return await this.runSecondPass(img,first,mode,gen,silent)}catch(e){console.error(e);if(!silent)this.status('error',(mode==='mangaocr'?'MangaOCR':'Two-pass')+': '+e.message);return first;}
       }
@@ -1265,7 +1268,7 @@
           if(gen!==this.generation)break;
           const r=regions[i],crop=await this.cropBox(img,r.bbox);
           if(!silent)this.status('loading',(mode==='mangaocr'?'MangaOCR':'Two-pass OCR')+' '+(i+1)+'/'+regions.length+' region…');
-          const text=mode==='mangaocr'?await this.secondClient.request(crop):await this.client.request(crop);
+          const text=mode==='mangaocr'?await this.secondClient.request(crop):await this.client.request(crop,{silent});
           let cleaned='';
           if(mode==='mangaocr'){
             cleaned=String(text??'').replace(/^True\s*/,'').trim();
@@ -1453,7 +1456,7 @@
     function formMap(cfg){return [
       ['japaneseMode','optJapaneseMode','b'],['showProgress','optShowProgress','b'],['coverSingle','optCoverSingle','b'],['snapDouble','optSnapDouble','b'],['publisherCombinedDetect','optPublisherCombinedDetect','b'],['floatyMode','optFloatyMode','b'],['zoomLevel','optZoomLevel','i'],
       ['ankiField','optAnkiField','s'],['ankiMiscField','optAnkiMiscField','s'],['ankiSentenceField','optAnkiSentenceField','s'],['ankiSentenceEnabled','optAnkiSentenceEnabled','b'],['ankiTagType','optAnkiTagType','s'],['ankiTagCustom','optAnkiTagCustom','s'],['ankiTagEnabled','optAnkiTagEnabled','b'],['ankiResize','optAnkiResize','b'],['nsfwTag','optNsfwTag','b'],['infoField','optInfoField','b'],['combineDual','optCombineDual','b'],['ankiAvif','optAnkiAvif','b'],['webpQuality','optWebpQuality','i'],['avifCrf','optAvifCrf','i'],['avifSpeed','optAvifSpeed','i'],
-      ['ocrUrl','optOcrUrl','s'],['ocrFontFamily','optOcrFontFamily','s'],['mangaOcrUrl','optMangaOcrUrl','s'],['ocrTwoPass','optOcrTwoPass','s'],['autoOcr','optAutoOcr','b'],['cacheOcr','optCacheOcr','b'],['ocrDisplay','optOcrDisplay','i'],['ocrDebug','optOcrDebug','b'],['ocrBackground','optOcrBackground','s'],['ocrGroupLines','optOcrGroupLines','b'],['ocrGroupGap','optOcrGroupGap','n'],['ocrRotation','optOcrRotation','b'],['ocrGeometry','optOcrGeometry','s'],['ocrScale','optOcrScale','i'],['ocrMaxFont','optOcrMaxFont','i'],
+      ['ocrUrl','optOcrUrl','s'],['ocrFontFamily','optOcrFontFamily','s'],['mangaOcrUrl','optMangaOcrUrl','s'],['ocrTwoPass','optOcrTwoPass','s'],['autoOcr','optAutoOcr','b'],['cacheOcr','optCacheOcr','b'],['ocrPreloadImages','optOcrPreloadImages','i'],['ocrDisplay','optOcrDisplay','i'],['ocrDebug','optOcrDebug','b'],['ocrBackground','optOcrBackground','s'],['ocrGroupLines','optOcrGroupLines','b'],['ocrGroupGap','optOcrGroupGap','n'],['ocrRotation','optOcrRotation','b'],['ocrGeometry','optOcrGeometry','s'],['ocrScale','optOcrScale','i'],['ocrMaxFont','optOcrMaxFont','i'],
       ['txWsUrl','optTxWsUrl','s'],['txFontSize','optTxFontSize','i'],['txAlign','optTxAlign','s'],['txFontFamily','optTxFontFamily','s']
     ];}
 
@@ -1488,7 +1491,7 @@
       show(id){$(id).style.display='grid'} hide(id){$(id).style.display='none'}
       syncAnkiOptions(){const enabled=this.cfg.get('ankiTagEnabled'),custom=this.cfg.get('ankiTagType')==='__custom__';for(const id of ['optAnkiTagType','ankiTagTypeInput'])$(id).disabled=!enabled;for(const id of ['optAnkiTagCustom','ankiTagCustomInput'])$(id).disabled=!enabled||!custom;}
       syncUI(){for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')e.checked=this.cfg.get(key);else e.value=this.cfg.get(key)}$('optZoomValue').textContent=this.cfg.get('zoomLevel')+'%';$('optOcrDisplayValue').textContent=OCR_LABELS[this.cfg.get('ocrDisplay')];$('optOcrScaleValue').textContent=this.cfg.get('ocrScale')+'%';$('optOcrGroupGapValue').textContent=this.cfg.get('ocrGroupGap')+'%';$('txFontSize').value=this.cfg.get('txFontSize');$('btnDual').classList.toggle('selected',this.cfg.get('dualMode'));$('btnScroll').classList.toggle('selected',this.cfg.get('scrollMode'));this.syncAnkiOptions();this.indicators();}
-      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);this.cfg.patch(vals);if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();toast('Options applied')}
+      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.ocrPreloadImages=clamp(Number(vals.ocrPreloadImages),0,20);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);this.cfg.patch(vals);if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();toast('Options applied')}
       openAnki(){if(!this.loader.count)return;this.show('ankiModal');$('ankiError').style.display='none';for(const [key,id,t] of [['ankiField','ankiFieldInput','s'],['ankiMiscField','ankiMiscFieldInput','s'],['ankiTagType','ankiTagTypeInput','s'],['ankiTagCustom','ankiTagCustomInput','s'],['ankiTagEnabled','ankiTagEnabledInput','b'],['ankiResize','ankiResizeInput','b'],['nsfwTag','ankiNsfwInput','b']]){const e=$(id);e[t==='b'?'checked':'value']=this.cfg.get(key)}this.syncAnkiOptions();$('ankiSentenceInput').value=this.ocr.getSelectedSentence()||'';const pv=$('ankiPreview');pv.innerHTML='';const i=this.nav.idx,cover=this.cfg.get('coverSingle')&&i===0,last=i===this.loader.count-1,combined=this.cfg.get('publisherCombinedDetect')?(this.loader.publisherCombined||new Set()):new Set(),singleByResolution=combined.has(i)||combined.has(i+1);if(this.cfg.get('dualMode')&&!cover&&!last&&!singleByResolution){const order=this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1];for(const n of order){const m=document.createElement('img');m.src=this.loader.get(n);pv.appendChild(m)}}else{const m=document.createElement('img');m.src=this.loader.get(i);pv.appendChild(m)}$('ankiMiscContent').textContent=`Source: ${this.loader.title}`}
       async updateAnki(){
         try{
@@ -1548,7 +1551,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
-  - v42: Added automatic OCR look-ahead preloading: 2 future source pages in single-page mode and 4 future source pages in dual-page mode; preloaded OCR results are reused when those pages become visible and are cleared when a new book is loaded.
+  - v43: Changed automatic OCR preload from mode-dependent page counts to a customizable source-image count; default is 2 images ahead in both Single and Dual Page modes. Silenced OwOCR background preload status messages so preload does not overwrite the visible OCR status.
   - v35: Replaced v34 AVIF/WebP export pipeline with the v8 WebP export implementation, removed the embedded AVIF worker and AVIF controls, and kept v34's Anki note-ID/background-job flow.
   - v40: Restored AVIF CPU-used control to 0–8 with default 0; added free-form OCR overlay/group font setting with BIZ UDMincho default/fallbacks.
   - v39: Expanded AVIF CRF control to 0–63 and AVIF speed to 0–8; changed Texthooker font to a free-form installed-font name with BIZ UDMincho default/fallbacks; removed runtime Tailwind CDN and Google Fonts dependencies so the HTML no longer requires those online assets.
