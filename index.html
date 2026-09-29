@@ -1172,15 +1172,48 @@
     }
 
     class OcrManager {
-      constructor(renderer,cfg){this.renderer=renderer;this.cfg=cfg;this.client=new OwocrClient(cfg,(type,msg)=>this.status(type,msg));this.secondClient=new RawTextWsClient(cfg);this.overlay=new OcrOverlay(cfg);this.cache=new Map();this.busy=false;this.generation=0;this._raf=0;window.addEventListener('resize',()=>this.scheduleRelayout(),{passive:true});document.addEventListener('scroll',()=>this.scheduleRelayout(),true);}
+      constructor(renderer,cfg,loader=null,nav=null){this.renderer=renderer;this.cfg=cfg;this.loader=loader;this.nav=nav;this.client=new OwocrClient(cfg,(type,msg)=>this.status(type,msg));this.secondClient=new RawTextWsClient(cfg);this.overlay=new OcrOverlay(cfg);this.cache=new Map();this.preloadCache=new Map();this.preloadInflight=new Set();this.busy=false;this.generation=0;this._raf=0;window.addEventListener('resize',()=>this.scheduleRelayout(),{passive:true});document.addEventListener('scroll',()=>this.scheduleRelayout(),true);}
       status(type,msg){const el=$('ocrStatus');el.className='ocr-status show '+type;el.textContent=msg;if(type!=='loading')setTimeout(()=>{el.classList.remove('show')},1800);}
-      reset(){this.generation++;this.busy=false;this.overlay.clear(this.renderer.frame);}
+      reset(clearCaches=false){this.generation++;this.busy=false;this.overlay.clear(this.renderer.frame);if(clearCaches){this.cache.clear();this.preloadCache.clear();this.preloadInflight.clear();}}
       clear(){this.generation++;this.overlay.clear(this.renderer.frame);this.status('success','OCR cleared');}
       scheduleRelayout(){cancelAnimationFrame(this._raf);this._raf=requestAnimationFrame(()=>this.overlay.relayout());}
       has(){return !!this.renderer.frame.querySelector('.ocr-layer');}
       getSelectedSentence(){return this.overlay.getSelectedSentence();}
       cycleDisplay(){const n=(this.cfg.get('ocrDisplay')+1)%3;this.cfg.set('ocrDisplay',n);if(this.has())this.overlay.refreshModes(this.renderer.frame);toast(`OCR: ${OCR_LABELS[n]}`);}
       toggle(){if(this.has()){this.clear();return;}this.processCurrent();}
+      preloadPageCount(){return this.cfg.get('dualMode')?4:2;}
+      visiblePageCount(){
+        if(!this.cfg.get('dualMode')||this.cfg.get('scrollMode')||!this.loader?.count)return 1;
+        const i=this.nav?.idx??0,total=this.loader.count;
+        return i<total-1&&!this.nav?.shouldShowSingle?.(i)?2:1;
+      }
+      async preloadAhead(gen=this.generation){
+        if(!this.cfg.get('autoOcr')||this.cfg.get('scrollMode')||gen!==this.generation||!this.loader?.count)return;
+        const total=this.loader.count,i=Math.max(0,this.nav?.idx??0),start=i+this.visiblePageCount(),count=this.preloadPageCount();
+        if(start>=total)return;
+        const mode=this.cfg.get('ocrTwoPass')||'off';
+        for(let page=start;page<Math.min(total,start+count);page++){
+          if(gen!==this.generation)break;
+          const src=this.loader.get(page);if(!src)continue;
+          const key=src+'|'+mode;
+          if(this.preloadCache.has(key)||this.preloadInflight.has(key)||(this.cfg.get('cacheOcr')&&this.cache.has(key)))continue;
+          const img=new Image();img.decoding='async';img.loading='eager';img.src=src;
+          try{
+            await new Promise(resolve=>{
+              if(img.complete&&img.naturalWidth){resolve();return;}
+              const done=()=>resolve();
+              img.addEventListener('load',done,{once:true});img.addEventListener('error',done,{once:true});
+            });
+            if(gen!==this.generation||!img.naturalWidth)continue;
+            this.preloadInflight.add(key);
+            const result=await this.runOne(img,page-start+1,count,gen,mode,true);
+            if(result&&gen===this.generation){
+              this.preloadCache.set(key,result);
+              while(this.preloadCache.size>12)this.preloadCache.delete(this.preloadCache.keys().next().value);
+            }
+          }catch(e){console.debug('OCR preload failed',page,e)}finally{this.preloadInflight.delete(key)}
+        }
+      }
       async currentImages(){
         let all=[...this.renderer.frame.querySelectorAll('img')].filter(img=>img.isConnected);
         if(!all.length){ await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))); all=[...this.renderer.frame.querySelectorAll('img')].filter(img=>img.isConnected); }
@@ -1197,15 +1230,18 @@
         const imgs=await this.currentImages();if(!imgs.length){this.status('error','OCR: no rendered image is ready');return;}const gen=this.generation;
         this.busy=true;const mode=this.cfg.get('ocrTwoPass')||'off';this.status('loading',mode==='owocr'?'Two-pass OCR…':mode==='mangaocr'?'Two-pass MangaOCR…':`OCR ${imgs.length>1?'pages':'page'}…`);
         let ok=0,fail=0;
-        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=this.cfg.get('cacheOcr')&&!force?this.cache.get(key):null;if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(result){this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}else fail++;}}
-        finally{this.busy=false;this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}`);}
+        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(result){this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}else fail++;}}
+        finally{this.busy=false;this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}`);if(!fail&&this.cfg.get('autoOcr')&&!this.cfg.get('scrollMode'))this.preloadAhead(gen);}
       }
-      async runOne(img,n,total,gen,mode='off'){
-        this.status('loading',`${mode==='owocr'?'Two-pass OCR':mode==='mangaocr'?'Two-pass MangaOCR':'OCR'} ${n}/${total}…`);
-        if(!img.complete)await new Promise(r=>{img.onload=r;img.onerror=r});if(gen!==this.generation||!document.body.contains(img))return null;
-        const buf=await this.toBuffer(img);let first;try{first=await this.client.request(buf)}catch(e){console.error(e);this.status('error',e.message);return null;}
+      async runOne(img,n,total,gen,mode='off',silent=false){
+        if(!silent)this.status('loading',(mode==='owocr'?'Two-pass OCR':mode==='mangaocr'?'Two-pass MangaOCR':'OCR')+' '+n+'/'+total+'…');
+        if(!img.complete)await new Promise(r=>{img.onload=r;img.onerror=r});
+        if(gen!==this.generation||(!silent&&!document.body.contains(img)))return null;
+        const buf=await this.toBuffer(img,silent);
+        let first;
+        try{first=await this.client.request(buf)}catch(e){console.error(e);if(!silent)this.status('error',e.message);return null;}
         if(mode==='off')return first;
-        try{return await this.runSecondPass(img,first,mode,gen)}catch(e){console.error(e);this.status('error',`${mode==='mangaocr'?'MangaOCR':'Two-pass'}: ${e.message}`);return first;}
+        try{return await this.runSecondPass(img,first,mode,gen,silent)}catch(e){console.error(e);if(!silent)this.status('error',(mode==='mangaocr'?'MangaOCR':'Two-pass')+': '+e.message);return first;}
       }
       async cropBox(img,bbox){
         const iw=img.naturalWidth||1,ih=img.naturalHeight||1;
@@ -1222,13 +1258,13 @@
         result._twoPassTexts=[...replacements];
         return result;
       }
-      async runSecondPass(img,first,mode,gen){
+      async runSecondPass(img,first,mode,gen,silent=false){
         const regions=this.collectPassRegions(first);if(!regions.length)return first;
         const out=[];
         for(let i=0;i<regions.length;i++){
           if(gen!==this.generation)break;
           const r=regions[i],crop=await this.cropBox(img,r.bbox);
-          this.status('loading',`${mode==='mangaocr'?'MangaOCR':'Two-pass OCR'} ${i+1}/${regions.length} region…`);
+          if(!silent)this.status('loading',(mode==='mangaocr'?'MangaOCR':'Two-pass OCR')+' '+(i+1)+'/'+regions.length+' region…');
           const text=mode==='mangaocr'?await this.secondClient.request(crop):await this.client.request(crop);
           let cleaned='';
           if(mode==='mangaocr'){
@@ -1258,14 +1294,14 @@
         }
         return this.replacePassText(first,out);
       }
-      async toBuffer(img){
+      async toBuffer(img,silent=false){
         const src=img.currentSrc||img.src;
         if(!src) throw new Error('Image has no source');
         const r=await fetch(src);
-        if(!r.ok) throw new Error(`Failed to read image (${r.status})`);
+        if(!r.ok) throw new Error('Failed to read image ('+r.status+')');
         const b=await r.arrayBuffer();
         if(!b.byteLength) throw new Error('Image data is empty');
-        this.status('loading',`OwOCR ← ${Math.round(b.byteLength/1024)} KB image sent`);
+        if(!silent)this.status('loading','OwOCR ← '+Math.round(b.byteLength/1024)+' KB image sent');
         return b;
       }
     }
@@ -1423,7 +1459,7 @@
 
     class App {
       constructor(){
-        this.cfg=new Settings();this.loader=new ImageLoader();this.loader.publisherCombined=new Set();this.nav=new Navigation(this.cfg,this.loader);this.renderer=new ReaderRenderer($('imageFrame'),$('workCanvas'),this.cfg);this.ocr=new OcrManager(this.renderer,this.cfg);this.anki=new AnkiConnector(this.renderer,this.cfg);
+        this.cfg=new Settings();this.loader=new ImageLoader();this.loader.publisherCombined=new Set();this.nav=new Navigation(this.cfg,this.loader);this.renderer=new ReaderRenderer($('imageFrame'),$('workCanvas'),this.cfg);this.ocr=new OcrManager(this.renderer,this.cfg,this.loader,this.nav);this.anki=new AnkiConnector(this.renderer,this.cfg);
         this._ankiJobSeq=0;this._dualEntryIdx=null;this.tx=new Texthooker({overlay:$('txOverlay'),content:$('txContent'),status:$('txStatus'),reverse:$('txReverseBtn'),align:$('txAlignBtn')},this.cfg);
         this.renderer.onRendered=()=>this.onRendered();this.bindAll();this.syncUI();if(LOCAL)$('fileProtocolNotice').style.display='block';
       }
@@ -1440,7 +1476,7 @@
       }
       bindAnkiInputs(){for(const [key,id,t] of [['ankiField','ankiFieldInput','s'],['ankiMiscField','ankiMiscFieldInput','s'],['ankiTagType','ankiTagTypeInput','s'],['ankiTagCustom','ankiTagCustomInput','s'],['ankiTagEnabled','ankiTagEnabledInput','b'],['ankiResize','ankiResizeInput','b'],['nsfwTag','ankiNsfwInput','b']])$(id).addEventListener(t==='b'?'change':'input',e=>{this.cfg.set(key,t==='b'?e.target.checked:e.target.value);this.syncAnkiOptions();});}
       bindDrag(){const frame=$('imageFrame');this.drag={on:false,x:0,y:0};frame.addEventListener('mousedown',e=>{if(e.button!==0||!this.cfg.get('floatyMode')||!this.loader.count)return;e.preventDefault();this.drag.on=true;this.drag.x=e.clientX;this.drag.y=e.clientY});window.addEventListener('mousemove',e=>{if(!this.drag.on)return;this.renderer.panBy(e.clientX-this.drag.x,e.clientY-this.drag.y);this.drag.x=e.clientX;this.drag.y=e.clientY});window.addEventListener('mouseup',e=>{if(e.button===0)this.drag.on=false});}
-      async load(files){if(!files?.length)return;try{const arr=[...files];if(arr.length===1&&ARC_RE.test(arr[0].name))await this.loader.loadArchive(arr[0]);else await this.loader.loadFiles(arr);if(!this.loader.count)throw new Error('No images found');this.loader.publisherCombined=this.loader.detectPublisherCombined();this.nav.setTotal(this.loader.count);this.nav.idx=0;$('fileOverlay').classList.add('hidden');document.title=this.loader.title;this.render();const combined=this.loader.publisherCombined.size;toast(`Loaded ${this.loader.title} · ${this.loader.count} pages${combined?` · ${combined} publisher-combined`:''}`)}catch(e){console.error(e);toast('Error: '+e.message,2600)}}
+      async load(files){if(!files?.length)return;try{const arr=[...files];if(arr.length===1&&ARC_RE.test(arr[0].name))await this.loader.loadArchive(arr[0]);else await this.loader.loadFiles(arr);if(!this.loader.count)throw new Error('No images found');this.loader.publisherCombined=this.loader.detectPublisherCombined();this.nav.setTotal(this.loader.count);this.nav.idx=0;this.ocr.reset(true);$('fileOverlay').classList.add('hidden');document.title=this.loader.title;this.render();const combined=this.loader.publisherCombined.size;toast(`Loaded ${this.loader.title} · ${this.loader.count} pages${combined?` · ${combined} publisher-combined`:''}`)}catch(e){console.error(e);toast('Error: '+e.message,2600)}}
       render(){this.ocr.reset();this.renderer.render(this.loader,this.nav.idx);this.indicators();}
       onRendered(){if(this.cfg.get('scrollMode')){const strip=this.renderer.frame.querySelector('.scroll-strip');if(strip){let timer=0;strip.addEventListener('scroll',()=>{clearTimeout(timer);if(this.cfg.get('autoOcr'))timer=setTimeout(()=>this.ocr.processCurrent(),180);},{passive:true});}}if(this.cfg.get('autoOcr'))setTimeout(()=>this.ocr.processCurrent(),80);}
       prev(){const before=this.nav.idx;if(this.nav.prev()){if(this.cfg.get('dualMode')&&this._dualEntryIdx!==null)this._dualLastIdx=this.nav.idx;this.render()}} next(){const before=this.nav.idx;if(this.nav.next()){if(this.cfg.get('dualMode')&&this._dualEntryIdx!==null)this._dualLastIdx=this.nav.idx;this.render()}} stepFwd(){const before=this.nav.idx;this.nav.stepFwd();if(this.cfg.get('dualMode')&&this._dualEntryIdx!==null)this._dualLastIdx=this.nav.idx;this.render()} stepBack(){const before=this.nav.idx;this.nav.stepBack();if(this.cfg.get('dualMode')&&this._dualEntryIdx!==null)this._dualLastIdx=this.nav.idx;this.render()}
@@ -1512,6 +1548,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v42: Added automatic OCR look-ahead preloading: 2 future source pages in single-page mode and 4 future source pages in dual-page mode; preloaded OCR results are reused when those pages become visible and are cleared when a new book is loaded.
   - v35: Replaced v34 AVIF/WebP export pipeline with the v8 WebP export implementation, removed the embedded AVIF worker and AVIF controls, and kept v34's Anki note-ID/background-job flow.
   - v40: Restored AVIF CPU-used control to 0–8 with default 0; added free-form OCR overlay/group font setting with BIZ UDMincho default/fallbacks.
   - v39: Expanded AVIF CRF control to 0–63 and AVIF speed to 0–8; changed Texthooker font to a free-form installed-font name with BIZ UDMincho default/fallbacks; removed runtime Tailwind CDN and Google Fonts dependencies so the HTML no longer requires those online assets.
