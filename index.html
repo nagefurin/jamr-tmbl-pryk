@@ -438,6 +438,16 @@
       for(let i=0;i<10;i++)r+=chars[(bytes[i]??Math.floor(Math.random()*chars.length))%chars.length];
       return `manga_${r}.${ext}`;
     }
+    function stableMediaToken(value){
+      let h1=2166136261>>>0,h2=2246822519>>>0;
+      const s=String(value??'');
+      for(let i=0;i<s.length;i++){
+        const c=s.charCodeAt(i);
+        h1=Math.imul(h1^c,16777619)>>>0;
+        h2=Math.imul(h2^c,3266489917)>>>0;
+      }
+      return (h1.toString(36).padStart(7,'0').slice(-5)+h2.toString(36).padStart(7,'0').slice(-5)).toLowerCase();
+    }
     function loadImg(src){ return new Promise((resolve,reject)=>{ const i=new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=src; }); }
 
     class ImageLoader {
@@ -1375,7 +1385,7 @@
         for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
         return btoa(binary);
       }
-      constructor(renderer,cfg){this.renderer=renderer;this.cfg=cfg;}
+      constructor(renderer,cfg){this.renderer=renderer;this.cfg=cfg;this.mediaNameCache=new Map();}
       req(action,params={}){return fetch(ANKI_URL,{method:'POST',body:JSON.stringify({action,version:ANKI_VER,params})}).then(r=>r.json());}
       async connected(){try{return(await fetch(ANKI_URL,{method:'POST',body:JSON.stringify({action:'requestPermission',version:ANKI_VER})})).ok}catch{return false}}
       async recentNote(){const r=await this.req('findNotes',{query:'added:1'});return r.result?.length?r.result.sort((a,b)=>b-a)[0]:null;}
@@ -1435,6 +1445,30 @@
         if(!this.cfg.get('ankiTagEnabled'))return '';
         return this.cfg.get('ankiTagType')==='__custom__'?(this.cfg.get('ankiTagCustom')||'').trim():this.cfg.get('ankiTagType');
       }
+      mediaSourceKey(loader,nav){
+        const i=nav.idx,total=loader.count,dual=this.cfg.get('dualMode');
+        const cover=this.cfg.get('coverSingle')&&i===0,last=i===total-1;
+        const combined=dual&&!cover&&!last&&this.cfg.get('combineDual')&&i+1<total;
+        const indices=combined?(this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1]):[i];
+        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
+        return [
+          loader.title,
+          combined?'dual':'single',
+          indices.join(','),
+          ext,
+          this.cfg.get('ankiResize')?'resize':'native',
+          ext==='webp'?this.cfg.get('webpQuality'):('crf'+this.cfg.get('avifCrf')+'s'+this.cfg.get('avifSpeed'))
+        ].join('|');
+      }
+      mediaFilename(loader,nav){
+        const key=this.mediaSourceKey(loader,nav);
+        const cached=this.mediaNameCache.get(key);
+        if(cached)return {key,filename:cached};
+        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
+        const filename='manga_'+stableMediaToken(key)+'.'+ext;
+        this.mediaNameCache.set(key,filename);
+        return {key,filename};
+      }
       async update(loader,nav,sentence='',nid=null,progress=null){
         if(!await this.connected())throw new Error('AnkiConnect is not running');
         nid=nid||await this.recentNote();
@@ -1454,11 +1488,25 @@
           progress?.(this.cfg.get('ankiAvif')?'Encoding AVIF…':'Encoding WebP…');
           b64=await this.imageB64(img,w,h);
         }
-        progress?.('Uploading image to Anki…');
-        const filename=generateFilename(loader.title,this.cfg.get('ankiAvif')?'avif':'webp');
-        const stored=await this.req('storeMediaFile',{filename,data:b64});
-        if(stored.error)throw new Error(stored.error);
-        const fields={[this.cfg.get('ankiField')]:`<img src="${stored.result}">`};
+        progress?.('Preparing media file…');
+        const media=this.mediaFilename(loader,nav);
+        let mediaExists=false;
+        try{
+          const found=await this.req('findMediaFiles',{pattern:media.filename});
+          mediaExists=Array.isArray(found.result)&&found.result.includes(media.filename);
+        }catch(e){
+          console.debug('Anki media lookup failed; will upload normally',e);
+        }
+        let storedName=media.filename;
+        if(!mediaExists){
+          progress?.('Uploading image to Anki…');
+          const stored=await this.req('storeMediaFile',{filename:media.filename,data:b64});
+          if(stored.error)throw new Error(stored.error);
+          if(stored.result)storedName=stored.result;
+        }else{
+          progress?.('Reusing existing page image…');
+        }
+        const fields={[this.cfg.get('ankiField')]:`<img src="${storedName}">`};
         if(this.cfg.get('ankiSentenceEnabled')&&this.cfg.get('ankiSentenceField')&&sentence.trim())fields[this.cfg.get('ankiSentenceField')]=sentence.trim();
         if(this.cfg.get('infoField'))fields[this.cfg.get('ankiMiscField')]=loader.title;
         await this.req('updateNoteFields',{note:{id:nid,fields}});
@@ -1592,7 +1640,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
-  - v44: Added ↑/↓ as aliases for W/S vertical scrolling and configurable Single Page focus on navigation: Top, Middle, Bottom, or Preserve Focus; default is Top.
+  - v45: Reused one deterministic Anki media filename for each source image/spread and skipped re-uploading when that media already exists, so multiple mined words from the same 23/24 spread share one image file instead of creating duplicate media.
   - v35: Replaced v34 AVIF/WebP export pipeline with the v8 WebP export implementation, removed the embedded AVIF worker and AVIF controls, and kept v34's Anki note-ID/background-job flow.
   - v40: Restored AVIF CPU-used control to 0–8 with default 0; added free-form OCR overlay/group font setting with BIZ UDMincho default/fallbacks.
   - v39: Expanded AVIF CRF control to 0–63 and AVIF speed to 0–8; changed Texthooker font to a free-form installed-font name with BIZ UDMincho default/fallbacks; removed runtime Tailwind CDN and Google Fonts dependencies so the HTML no longer requires those online assets.
