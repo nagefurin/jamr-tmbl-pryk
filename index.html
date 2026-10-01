@@ -1015,6 +1015,7 @@
         for(let i=0;i<12;i++){const mid=(lo+hi)/2;if(fits(mid))lo=mid;else hi=mid;}
         return clamp(lo*scale,8,maxFont);
       }
+      groupByKey(key){if(!this.root||!key)return null;return this.root.querySelector(`[data-group-key="${CSS.escape(key)}"]`);}
       activeGroups(){return [...this.activeGroupKeys].map(k=>this.groupByKey(k)).filter(Boolean);}
       saveBaseGeometry(group){
         group._baseRect=group._baseRect||{
@@ -1187,6 +1188,7 @@
             lw=Math.max(lw,fs*1.12);
             lh=Math.max(lh,Math.ceil(fs*chars*1.04));
           }
+          const lx=rect.left-frameRect.left+lb.center_x*rect.width,
                 ly=rect.top-frameRect.top+lb.center_y*rect.height;
           const line=document.createElement('span');
           line.className=`ocr-line${vertical?' vertical':''}${extraClass?' '+extraClass:''}`;
@@ -1701,6 +1703,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v52: Fixed the OCR overlay rendering regression by restoring line center coordinates and the OCR group lookup helper; valid OCR results can now render again and grouped OCR activation remains intact.
   - v51: Improved OCR display with subtle passive text (default 12%), separate active text/background opacity, adjustable OCR hitbox scale, clearer selected-line highlighting, smoother overlay transitions, measured font fitting, improved text centering, and more natural Japanese vertical character rendering while preserving Yomitan-selectable OCR lines.
   - v49: Added one-click copying for the OCR launch commands, changed the MangaOCR helper command to -of text, added a Download index.html button that fetches the latest GitHub Pages copy and embeds current settings, and added Reset to Defaults in Advanced Options.
   - v48: Added an Advanced Options tab with JSON settings import/export and an Offline Cache control. The offline control registers sw.js, fetches the latest GitHub Pages index.html with cache bypass, stores it in Cache Storage for offline navigation, and the service worker refreshes the shell from the network on online navigations.
