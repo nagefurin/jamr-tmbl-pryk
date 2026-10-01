@@ -1640,11 +1640,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v46: Kept deterministic Anki media reuse for both WebP and AVIF. Multiple cards mined from the same source page/spread reuse the same media filename when encoding settings match; changing format, resize mode, WebP quality, or AVIF CRF/speed produces a distinct deterministic filename. Existing older duplicate media files are not automatically deleted.
   - v45: Reused one deterministic Anki media filename for each source image/spread and skipped re-uploading when that media already exists, so multiple mined words from the same 23/24 spread share one image file instead of creating duplicate media.
-  - v35: Replaced v34 AVIF/WebP export pipeline with the v8 WebP export implementation, removed the embedded AVIF worker and AVIF controls, and kept v34's Anki note-ID/background-job flow.
+  - v44: Added ↑/↓ as aliases for W/S vertical scrolling and configurable Single Page focus on navigation: Top, Middle, Bottom, or Preserve Focus; default is Top.
+  - v43: Changed automatic OCR preload from mode-dependent page counts to a customizable source-image count; default is 2 images ahead in both Single and Dual Page modes. Silenced OwOCR background preload status messages so preload does not overwrite the visible OCR status.
+  - v42: Added automatic OCR look-ahead preloading: 2 future source pages in single-page mode and 4 future source pages in dual-page mode; preloaded OCR results are reused when those pages become visible and are cleared when a new book is loaded.
+  - v41: Replaced WebP quality, AVIF CRF, and AVIF CPU-used sliders with numeric text inputs; WebP uses 1–100, AVIF CRF uses 1–63, AVIF CPU-used uses 0–8; added inline explanations and fixed numeric saving so zero remains a valid CPU-used value.
   - v40: Restored AVIF CPU-used control to 0–8 with default 0; added free-form OCR overlay/group font setting with BIZ UDMincho default/fallbacks.
   - v39: Expanded AVIF CRF control to 0–63 and AVIF speed to 0–8; changed Texthooker font to a free-form installed-font name with BIZ UDMincho default/fallbacks; removed runtime Tailwind CDN and Google Fonts dependencies so the HTML no longer requires those online assets.
-  - v41: Replaced WebP quality, AVIF CRF, and AVIF CPU-used sliders with numeric text inputs; WebP uses 1–100, AVIF CRF uses 1–63, AVIF CPU-used uses 0–8; added inline explanations and fixed numeric saving so zero remains a valid CPU-used value.
+  - v35: Replaced v34 AVIF/WebP export pipeline with the v8 WebP export implementation, removed the embedded AVIF worker and AVIF controls, and kept v34's Anki note-ID/background-job flow.
   - v34: Added automatic AI maintainer update instructions. No functional code changes intended.
 - BASELINE: this file is intentionally based on v26 because the user opens it directly in Chrome as file://. Do not copy the v27-v30 picker changes unless explicitly requested.
 - Keep file loading as v26. Test modifications in the real file:// environment, not only under localhost.
