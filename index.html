@@ -1338,7 +1338,7 @@
         const imgs=await this.currentImages();if(!imgs.length){this.status('error','OCR: no rendered image is ready');return;}const gen=this.generation;
         this.busy=true;const mode=this.cfg.get('ocrTwoPass')||'off';this.status('loading',mode==='owocr'?'Two-pass OCR…':mode==='mangaocr'?'Two-pass MangaOCR…':`OCR ${imgs.length>1?'pages':'page'}…`);
         let ok=0,fail=0;
-        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(!result){fail++;continue}try{this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}catch(e){fail++;console.error('OCR overlay render failed',e);if(fail===1)this.status('error','OCR render failed: '+(e?.message||e));}}}
+        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);try{if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}}catch(e){fail++;console.error('OCR request failed',e);if(fail===1)this.status('error','OCR request failed: '+(e?.message||e));continue}if(!result){fail++;continue}try{this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}catch(e){fail++;console.error('OCR overlay render failed',e);if(fail===1)this.status('error','OCR render failed: '+(e?.message||e));}}}
         finally{this.busy=false;this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}`);if(!fail&&this.cfg.get('autoOcr')&&!this.cfg.get('scrollMode'))this.preloadAhead(gen);}
       }
       async runOne(img,n,total,gen,mode='off',silent=false){
@@ -1405,12 +1405,22 @@
       async toBuffer(img,silent=false){
         const src=img.currentSrc||img.src;
         if(!src) throw new Error('Image has no source');
-        const r=await fetch(src);
-        if(!r.ok) throw new Error('Failed to read image ('+r.status+')');
-        const b=await r.arrayBuffer();
-        if(!b.byteLength) throw new Error('Image data is empty');
-        if(!silent)this.status('loading','OwOCR ← '+Math.round(b.byteLength/1024)+' KB image sent');
-        return b;
+        try{
+          const r=await fetch(src);
+          if(!r.ok)throw new Error('Failed to read image ('+r.status+')');
+          const b=await r.arrayBuffer();
+          if(b.byteLength){if(!silent)this.status('loading','OwOCR ← '+Math.round(b.byteLength/1024)+' KB image sent');return b;}
+        }catch(e){console.debug('OCR direct image fetch failed, using canvas fallback',e);}
+        const canvas=document.createElement('canvas');
+        canvas.width=img.naturalWidth||img.width||1;canvas.height=img.naturalHeight||img.height||1;
+        const ctx=canvas.getContext('2d');
+        if(!ctx)throw new Error('Could not create canvas for OCR image');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('Could not encode image for OCR')),'image/png'));
+        const data=await blob.arrayBuffer();
+        if(!data.byteLength)throw new Error('Encoded OCR image is empty');
+        if(!silent)this.status('loading','OwOCR ← '+Math.round(data.byteLength/1024)+' KB image sent');
+        return data;
       }
     }
 
@@ -1703,6 +1713,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v54: Fixed the remaining OCR zero-image error path by catching request failures before the success counter can be finalized and added a canvas PNG fallback when direct image fetch fails, so local/blob-backed manga images can still be sent to OwOCR.
   - v53: Hardened OCR rendering so an overlay exception cannot abort the whole OCR pass or falsely report "OCR ready: 0 image"; per-image render failures are now surfaced as errors and group lookup no longer depends on CSS.escape.
   - v52: Fixed the OCR overlay rendering regression by restoring line center coordinates and the OCR group lookup helper; valid OCR results can now render again and grouped OCR activation remains intact.
   - v51: Improved OCR display with subtle passive text (default 12%), separate active text/background opacity, adjustable OCR hitbox scale, clearer selected-line highlighting, smoother overlay transitions, measured font fitting, improved text centering, and more natural Japanese vertical character rendering while preserving Yomitan-selectable OCR lines.
