@@ -306,8 +306,8 @@
               <div class="opt-hint">Faint OCR text/background that stays visible without covering the manga.</div>
               <div class="opt-row"><span class="opt-label">Active text opacity</span><span id="optOcrActiveTextOpacityValue">100%</span></div>
               <input id="optOcrActiveTextOpacity" type="range" min="0" max="100" step="1" value="100" style="width:100%">
-              <div class="opt-row"><span class="opt-label">Active background opacity</span><span id="optOcrActiveBgOpacityValue">70%</span></div>
-              <input id="optOcrActiveBgOpacity" type="range" min="0" max="100" step="1" value="70" style="width:100%">
+              <div class="opt-row"><span class="opt-label">Active background opacity</span><span id="optOcrActiveBgOpacityValue">100%</span></div>
+              <input id="optOcrActiveBgOpacity" type="range" min="0" max="100" step="1" value="100" style="width:100%">
               <div class="opt-row"><span class="opt-label">OCR box scale</span><span id="optOcrBoxScaleValue">100%</span></div>
               <input id="optOcrBoxScale" type="range" min="80" max="140" step="5" value="100" style="width:100%">
               <div class="opt-hint">Expands or shrinks each OCR hit area around its detected center without changing the source image.</div>
@@ -439,7 +439,7 @@
       snapDouble:true, publisherCombinedDetect:true, floatyMode:false, pageFocus:'top', zoomLevel:175,
       ankiField:'Picture', ankiMiscField:'MiscInfo', ankiSentenceField:'', ankiSentenceEnabled:false, ankiTagType:'doujinshi', ankiTagCustom:'',
       ankiTagEnabled:true, ankiResize:true, nsfwTag:true, infoField:true, combineDual:true, webpQuality:80, ankiAvif:false, avifCrf:42, avifSpeed:4,
-      ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrPreloadImages:3, ocrDisplay:1, ocrPassiveOpacity:12, ocrActiveTextOpacity:100, ocrActiveBgOpacity:70, ocrBoxScale:100, ocrDebug:false, ocrBackground:'black',
+      ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrPreloadImages:3, ocrDisplay:1, ocrPassiveOpacity:12, ocrActiveTextOpacity:100, ocrActiveBgOpacity:100, ocrBoxScale:100, ocrDebug:false, ocrBackground:'black',
       ocrGroupLines:true, ocrGroupGap:2, ocrRotation:true, ocrGeometry:'auto', ocrFontFamily:'BIZ UDGothic', ocrScale:100, ocrMaxFont:54,
       txWsUrl:'ws://127.0.0.1:6677', txFontSize:50, txAlign:'center', txFontFamily:'BIZ UDGothic', txReversed:false
     };
@@ -1713,6 +1713,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v55: Changed the default active OCR background opacity to 100% so the selected/active OCR line uses a fully opaque background while keeping the active opacity control configurable.
   - v54: Fixed the remaining OCR zero-image error path by catching request failures before the success counter can be finalized and added a canvas PNG fallback when direct image fetch fails, so local/blob-backed manga images can still be sent to OwOCR.
   - v53: Hardened OCR rendering so an overlay exception cannot abort the whole OCR pass or falsely report "OCR ready: 0 image"; per-image render failures are now surfaced as errors and group lookup no longer depends on CSS.escape.
   - v52: Fixed the OCR overlay rendering regression by restoring line center coordinates and the OCR group lookup helper; valid OCR results can now render again and grouped OCR activation remains intact.
