@@ -1015,7 +1015,7 @@
         for(let i=0;i<12;i++){const mid=(lo+hi)/2;if(fits(mid))lo=mid;else hi=mid;}
         return clamp(lo*scale,8,maxFont);
       }
-      groupByKey(key){if(!this.root||!key)return null;return this.root.querySelector(`[data-group-key="${CSS.escape(key)}"]`);}
+      groupByKey(key){if(!this.root||!key)return null;for(const el of this.root.querySelectorAll('.ocr-region'))if(el.dataset.groupKey===key)return el;return null;}
       activeGroups(){return [...this.activeGroupKeys].map(k=>this.groupByKey(k)).filter(Boolean);}
       saveBaseGeometry(group){
         group._baseRect=group._baseRect||{
@@ -1338,7 +1338,7 @@
         const imgs=await this.currentImages();if(!imgs.length){this.status('error','OCR: no rendered image is ready');return;}const gen=this.generation;
         this.busy=true;const mode=this.cfg.get('ocrTwoPass')||'off';this.status('loading',mode==='owocr'?'Two-pass OCR…':mode==='mangaocr'?'Two-pass MangaOCR…':`OCR ${imgs.length>1?'pages':'page'}…`);
         let ok=0,fail=0;
-        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(result){this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}else fail++;}}
+        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(!result){fail++;continue}try{this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}catch(e){fail++;console.error('OCR overlay render failed',e);if(fail===1)this.status('error','OCR render failed: '+(e?.message||e));}}}
         finally{this.busy=false;this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}`);if(!fail&&this.cfg.get('autoOcr')&&!this.cfg.get('scrollMode'))this.preloadAhead(gen);}
       }
       async runOne(img,n,total,gen,mode='off',silent=false){
@@ -1703,6 +1703,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v53: Hardened OCR rendering so an overlay exception cannot abort the whole OCR pass or falsely report "OCR ready: 0 image"; per-image render failures are now surfaced as errors and group lookup no longer depends on CSS.escape.
   - v52: Fixed the OCR overlay rendering regression by restoring line center coordinates and the OCR group lookup helper; valid OCR results can now render again and grouped OCR activation remains intact.
   - v51: Improved OCR display with subtle passive text (default 12%), separate active text/background opacity, adjustable OCR hitbox scale, clearer selected-line highlighting, smoother overlay transitions, measured font fitting, improved text centering, and more natural Japanese vertical character rendering while preserving Yomitan-selectable OCR lines.
   - v49: Added one-click copying for the OCR launch commands, changed the MangaOCR helper command to -of text, added a Download index.html button that fetches the latest GitHub Pages copy and embeds current settings, and added Reset to Defaults in Advanced Options.
