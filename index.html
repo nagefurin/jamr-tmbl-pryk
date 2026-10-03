@@ -1344,8 +1344,10 @@
             if(gen!==this.generation)break;
             const img=imgs[i],key=this.cacheKey(img);
             let result=!force?this.preloadCache.get(key)||null:null;
+            const fromStoredResult=!!result;
             this.preloadCache.delete(key);
             if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);
+            const fromCache=!!result;
             if(!result){
               if(mode==='mangaocr'){
                 result=await this.runFirstPass(img,i+1,imgs.length,gen,false);
@@ -1358,7 +1360,7 @@
             this.overlay.applyToImage(img,result);
             ok++;
             this.scheduleRelayout();
-            if(mode==='mangaocr'&&!this.preloadCache.has(key)&&!this.cache.has(key)){
+            if(mode==='mangaocr'&&!fromStoredResult&&!fromCache){
               this.runSecondPassStreaming(img,result,gen,false).then(finalResult=>{
                 if(finalResult&&gen===this.generation&&this.cfg.get('cacheOcr'))this.cache.set(key,finalResult);
               }).catch(e=>{console.error(e);if(gen===this.generation)this.status('error','MangaOCR: '+(e?.message||e));});
@@ -1768,6 +1770,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v52: Kept completed cached/preloaded MangaOCR results from being redundantly sent through the 7441 refinement stream; only fresh first-pass results start incremental refinement.
   - v51: Changed two-pass MangaOCR to stream per detected OCR region: the first-pass page is displayed immediately, each crop is sent to the MangaOCR WebSocket at 7441 sequentially, and each returned result replaces its corresponding first-pass text immediately instead of waiting for all regions.
   - v50: Changed Ctrl+Q from a one-way Auto OCR enable shortcut into a toggle that enables or disables Auto OCR and synchronizes the Options checkbox.
   - v49: Added one-click copying for the OCR launch commands, changed the MangaOCR helper command to -of text, added a Download index.html button that fetches the latest GitHub Pages copy and embeds current settings, and added Reset to Defaults in Advanced Options.
