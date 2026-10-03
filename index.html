@@ -880,7 +880,7 @@
       renderImageItems(img,groups,root){
         const id=this.imageId(img);
         root.querySelectorAll(`[data-ocr-img-id="${id}"]`).forEach(x=>x.remove());
-        for(const g of groups)this.addRegion(root,img,g);
+        for(let i=0;i<groups.length;i++)this.addRegion(root,img,groups[i],i);
       }
       relayout(){
         if(!this.root)return;
@@ -1085,7 +1085,7 @@
         }
         return out;
       }
-      addRegion(root,img,g){
+      addRegion(root,img,g,groupIndex=0){
         const frameRect=this.frame.getBoundingClientRect(),rect=img.getBoundingClientRect();
         if(rect.width<1||rect.height<1)return;
         const iw=img.naturalWidth||1,ih=img.naturalHeight||1,gb=this.normalizeBox(g.bbox,iw,ih);
@@ -1093,7 +1093,7 @@
         const group=document.createElement('div');
         group.className='ocr-region';
         group.dataset.ocrImgId=this.imageId(img);
-        group.dataset.groupKey=`${this.imageId(img)}:${g.groupId||g.kind}:${Math.random().toString(36).slice(2)}`;
+        group.dataset.groupKey=`${this.imageId(img)}:${g.groupId||g.kind}:${groupIndex}`;
         group._ocrSentence=g.text;
         group._ocrData=g;
 
@@ -1770,6 +1770,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v53: Made OCR group keys stable across relayouts so a left-click-opened OCR group keeps its active state while incremental MangaOCR (7441) results update the underlying text.
   - v52: Kept completed cached/preloaded MangaOCR results from being redundantly sent through the 7441 refinement stream; only fresh first-pass results start incremental refinement.
   - v51: Changed two-pass MangaOCR to stream per detected OCR region: the first-pass page is displayed immediately, each crop is sent to the MangaOCR WebSocket at 7441 sequentially, and each returned result replaces its corresponding first-pass text immediately instead of waiting for all regions.
   - v50: Changed Ctrl+Q from a one-way Auto OCR enable shortcut into a toggle that enables or disables Auto OCR and synchronizes the Options checkbox.
