@@ -1245,6 +1245,38 @@
         this.activeMasterKey=null;
         this.selectedSentence='';
       }
+      replaceSecondPassText(img,index,text){
+        const item=this.items.filter(x=>x.img===img)[index];
+        if(!item||!this.root)return;
+        const groupEls=this.root.querySelectorAll(`.ocr-region[data-ocr-img-id="${this.imageId(img)}"]`);
+        const group=groupEls[index];
+        if(!group)return;
+        const g=item.g;
+        const refined=String(text??'').trim()||String(g.text||'');
+        g._twoPassText=refined;
+        g.text=refined;
+        group._ocrSentence=refined;
+        const sourceLines=g.lines?.length?g.lines:[{bbox:g.bbox,text:refined,dir:g.dir}];
+        const parts=this.distributeRefinedText(refined,sourceLines);
+        const lineEls=group._lineEls||[];
+        if(lineEls.length===1){
+          const line=lineEls[0];
+          line.textContent=refined;
+          line.dataset.text=refined;
+          line.dataset.visualText=refined;
+        }else{
+          for(let i=0;i<lineEls.length;i++){
+            const part=(parts[i]??sourceLines[i]?.text??refined).trim();
+            const line=lineEls[i];
+            line.textContent=part;
+            line.dataset.text=part;
+            line.dataset.visualText=part;
+          }
+        }
+        if(this.activeGroupKeys.has(group.dataset.groupKey)){
+          this.renderActiveCard();
+        }
+      }
       getSelectedSentence(){return this.selectedSentence||'';}
     }
 
@@ -1305,10 +1337,45 @@
       cacheKey(img){return `${img.currentSrc||img.src}|${this.cfg.get('ocrTwoPass')||'off'}`;}
       async processCurrent(force=false){
         const imgs=await this.currentImages();if(!imgs.length){this.status('error','OCR: no rendered image is ready');return;}const gen=this.generation;
-        this.busy=true;const mode=this.cfg.get('ocrTwoPass')||'off';this.status('loading',mode==='owocr'?'Two-pass OCR…':mode==='mangaocr'?'Two-pass MangaOCR…':`OCR ${imgs.length>1?'pages':'page'}…`);
+        this.busy=true;const mode=this.cfg.get('ocrTwoPass')||'off';this.status('loading',mode==='owocr'?'Two-pass OCR…':mode==='mangaocr'?'MangaOCR first pass…':`OCR ${imgs.length>1?'pages':'page'}…`);
         let ok=0,fail=0;
-        try{for(let i=0;i<imgs.length;i++){if(gen!==this.generation)break;const img=imgs[i],key=this.cacheKey(img);let result=!force?this.preloadCache.get(key)||null:null;this.preloadCache.delete(key);if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);if(!result){result=await this.runOne(img,i+1,imgs.length,gen,mode);if(result&&this.cfg.get('cacheOcr'))this.cache.set(key,result);}if(result){this.overlay.applyToImage(img,result);ok++;this.scheduleRelayout();}else fail++;}}
-        finally{this.busy=false;this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}`);if(!fail&&this.cfg.get('autoOcr')&&!this.cfg.get('scrollMode'))this.preloadAhead(gen);}
+        try{
+          for(let i=0;i<imgs.length;i++){
+            if(gen!==this.generation)break;
+            const img=imgs[i],key=this.cacheKey(img);
+            let result=!force?this.preloadCache.get(key)||null:null;
+            this.preloadCache.delete(key);
+            if(!result&&!force&&this.cfg.get('cacheOcr'))result=this.cache.get(key);
+            if(!result){
+              if(mode==='mangaocr'){
+                result=await this.runFirstPass(img,i+1,imgs.length,gen,false);
+              }else{
+                result=await this.runOne(img,i+1,imgs.length,gen,mode,false);
+              }
+              if(result&&this.cfg.get('cacheOcr')&&mode!=='mangaocr')this.cache.set(key,result);
+            }
+            if(!result){fail++;continue}
+            this.overlay.applyToImage(img,result);
+            ok++;
+            this.scheduleRelayout();
+            if(mode==='mangaocr'&&!this.preloadCache.has(key)&&!this.cache.has(key)){
+              this.runSecondPassStreaming(img,result,gen,false).then(finalResult=>{
+                if(finalResult&&gen===this.generation&&this.cfg.get('cacheOcr'))this.cache.set(key,finalResult);
+              }).catch(e=>{console.error(e);if(gen===this.generation)this.status('error','MangaOCR: '+(e?.message||e));});
+            }
+          }
+        }finally{
+          this.busy=false;
+          this.status(fail?'error':'success',fail?`OCR done: ${ok} ok, ${fail} failed`:`OCR ready: ${ok} image${ok===1?'':'s'}${mode==='mangaocr'?' · MangaOCR refining…':''}`);
+          if(!fail&&this.cfg.get('autoOcr')&&!this.cfg.get('scrollMode'))this.preloadAhead(gen);
+        }
+      }
+      async runFirstPass(img,n,total,gen,silent=false){
+        if(!silent)this.status('loading',(this.cfg.get('ocrTwoPass')==='mangaocr'?'MangaOCR first pass':'OCR')+' '+n+'/'+total+'…');
+        if(!img.complete)await new Promise(r=>{img.onload=r;img.onerror=r});
+        if(gen!==this.generation||(!silent&&!document.body.contains(img)))return null;
+        const buf=await this.toBuffer(img,silent);
+        try{return await this.client.request(buf,{silent})}catch(e){console.error(e);if(!silent)this.status('error',e.message);return null;}
       }
       async runOne(img,n,total,gen,mode='off',silent=false){
         if(!silent)this.status('loading',(mode==='owocr'?'Two-pass OCR':mode==='mangaocr'?'Two-pass MangaOCR':'OCR')+' '+n+'/'+total+'…');
@@ -1334,6 +1401,35 @@
       replacePassText(result,replacements){
         result._twoPassTexts=[...replacements];
         return result;
+      }
+      async runSecondPassStreaming(img,first,gen,silent=false){
+        const regions=this.collectPassRegions(first);
+        if(!regions.length)return first;
+        const replacements=[];
+        first._twoPassTexts=[];
+        for(let i=0;i<regions.length;i++){
+          if(gen!==this.generation)return first;
+          const r=regions[i];
+          try{
+            const crop=await this.cropBox(img,r.bbox);
+            if(!silent)this.status('loading','MangaOCR '+(i+1)+'/'+regions.length+' region…');
+            const text=await this.secondClient.request(crop);
+            const cleaned=String(text??'').replace(/^True\s*/,'').trim()||r.text;
+            replacements[i]=cleaned;
+            first._twoPassTexts[i]=cleaned;
+            if(gen===this.generation){
+              this.overlay.replaceSecondPassText(img,i,cleaned);
+              this.scheduleRelayout();
+            }
+          }catch(e){
+            console.error('MangaOCR region failed',i,e);
+            replacements[i]=r.text;
+            first._twoPassTexts[i]=r.text;
+            if(!silent&&gen===this.generation)this.status('error','MangaOCR '+(i+1)+'/'+regions.length+': '+(e?.message||e));
+          }
+        }
+        if(gen===this.generation&&!silent)this.status('success','MangaOCR refinement complete');
+        return this.replacePassText(first,replacements);
       }
       async runSecondPass(img,first,mode,gen,silent=false){
         const regions=this.collectPassRegions(first);if(!regions.length)return first;
@@ -1672,6 +1768,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v51: Changed two-pass MangaOCR to stream per detected OCR region: the first-pass page is displayed immediately, each crop is sent to the MangaOCR WebSocket at 7441 sequentially, and each returned result replaces its corresponding first-pass text immediately instead of waiting for all regions.
   - v50: Changed Ctrl+Q from a one-way Auto OCR enable shortcut into a toggle that enables or disables Auto OCR and synchronizes the Options checkbox.
   - v49: Added one-click copying for the OCR launch commands, changed the MangaOCR helper command to -of text, added a Download index.html button that fetches the latest GitHub Pages copy and embeds current settings, and added Reset to Defaults in Advanced Options.
   - v48: Added an Advanced Options tab with JSON settings import/export and an Offline Cache control. The offline control registers sw.js, fetches the latest GitHub Pages index.html with cache bypass, stores it in Cache Storage for offline navigation, and the service worker refreshes the shell from the network on online navigations.
