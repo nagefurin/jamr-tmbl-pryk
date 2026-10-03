@@ -433,7 +433,7 @@
       txWsUrl:'ws://127.0.0.1:6677', txFontSize:50, txAlign:'center', txFontFamily:'BIZ UDGothic', txReversed:false
     };
 
-    class Settings {
+    class SettingsStore {
       constructor(){
         this.d = {...DEFAULTS};
         try { const v=localStorage.getItem(SETTINGS_KEY); if(v) this.d={...this.d,...JSON.parse(v)}; } catch {}
@@ -474,7 +474,7 @@
     }
     function loadImg(src){ return new Promise((resolve,reject)=>{ const i=new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=src; }); }
 
-    class ImageLoader {
+    class BookLoader {
       constructor(){ this.urls=[]; this.title=''; this.meta=[]; }
       clear(){ this.urls.forEach(u=>URL.revokeObjectURL(u)); this.urls=[]; this.meta=[]; this.title=''; }
       async loadMeta(){
@@ -533,7 +533,7 @@
       get(i){return this.urls[i]||null;} get count(){return this.urls.length;}
     }
 
-    class ReaderRenderer {
+    class ReaderView {
       constructor(frame,canvas,cfg){
         this.frame=frame;
         this.canvas=canvas;
@@ -694,7 +694,7 @@
       }
     }
 
-    class Navigation {
+    class PageNavigator {
       constructor(cfg,loader=null){this.cfg=cfg;this.loader=loader;this.idx=0;this.total=0;}
       setTotal(n){this.total=n;}
       isResolutionSingle(i){
@@ -790,7 +790,7 @@
       }
     }
 
-    class RawTextWsClient {
+    class MangaOcrClient {
       constructor(cfg){this.cfg=cfg;this.ws=null;this.url='';this.queue=Promise.resolve();this.connectedPromise=null;}
       close(){try{this.ws?.close()}catch{}this.ws=null;this.url='';this.connectedPromise=null;}
       async connect(){
@@ -827,7 +827,7 @@
       }
     }
 
-    class OcrOverlay {
+    class OcrOverlayView {
       getOcrFontFamily(){const ff=String(this.cfg.get('ocrFontFamily')||'BIZ UDGothic').trim().replace(/["']/g,'');return `"${ff||'BIZ UDMincho'}", "BIZ UDGothic", "Yu Gothic", "Hiragino Kaku Gothic ProN", sans-serif`;}
 
       constructor(cfg){
@@ -1280,8 +1280,8 @@
       getSelectedSentence(){return this.selectedSentence||'';}
     }
 
-    class OcrManager {
-      constructor(renderer,cfg,loader=null,nav=null){this.renderer=renderer;this.cfg=cfg;this.loader=loader;this.nav=nav;this.client=new OwocrClient(cfg,(type,msg)=>this.status(type,msg));this.secondClient=new RawTextWsClient(cfg);this.overlay=new OcrOverlay(cfg);this.cache=new Map();this.preloadCache=new Map();this.preloadInflight=new Set();this.busy=false;this.generation=0;this._raf=0;window.addEventListener('resize',()=>this.scheduleRelayout(),{passive:true});document.addEventListener('scroll',()=>this.scheduleRelayout(),true);}
+    class OcrEngine {
+      constructor(renderer,cfg,loader=null,nav=null){this.renderer=renderer;this.cfg=cfg;this.loader=loader;this.nav=nav;this.client=new OwocrClient(cfg,(type,msg)=>this.status(type,msg));this.secondClient=new MangaOcrClient(cfg);this.overlay=new OcrOverlayView(cfg);this.cache=new Map();this.preloadCache=new Map();this.preloadInflight=new Set();this.busy=false;this.generation=0;this._raf=0;window.addEventListener('resize',()=>this.scheduleRelayout(),{passive:true});document.addEventListener('scroll',()=>this.scheduleRelayout(),true);}
       status(type,msg){const el=$('ocrStatus');el.className='ocr-status show '+type;el.textContent=msg;if(type!=='loading')setTimeout(()=>{el.classList.remove('show')},1800);}
       reset(clearCaches=false){this.generation++;this.busy=false;this.overlay.clear(this.renderer.frame);if(clearCaches){this.cache.clear();this.preloadCache.clear();this.preloadInflight.clear();}}
       clear(){this.generation++;this.overlay.clear(this.renderer.frame);this.status('success','OCR cleared');}
@@ -1481,7 +1481,37 @@
       }
     }
 
-    class AnkiConnector {
+    class AnkiMediaIdentity {
+      constructor(cfg){this.cfg=cfg;this.nameCache=new Map();}
+      sourceKey(loader,nav){
+        const i=nav.idx,total=loader.count,dual=this.cfg.get('dualMode');
+        const cover=this.cfg.get('coverSingle')&&i===0,last=i===total-1;
+        const combined=dual&&!cover&&!last&&this.cfg.get('combineDual')&&i+1<total;
+        const indices=combined?(this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1]):[i];
+        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
+        return [
+          loader.title,
+          combined?'dual':'single',
+          indices.join(','),
+          ext,
+          this.cfg.get('ankiResize')?'resize':'native',
+          ext==='webp'?this.cfg.get('webpQuality'):('crf'+this.cfg.get('avifCrf')+'s'+this.cfg.get('avifSpeed'))
+        ].join('|');
+      }
+      mediaSourceKey(loader,nav){return this.sourceKey(loader,nav);}
+      mediaFilename(loader,nav){
+        const key=this.sourceKey(loader,nav);
+        const cached=this.nameCache.get(key);
+        if(cached)return {key,filename:cached};
+        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
+        // Compatibility contract: manga_ + exactly 10 lowercase alphanumeric characters + extension.
+        const filename='manga_'+stableMediaToken(key)+'.'+ext;
+        this.nameCache.set(key,filename);
+        return {key,filename};
+      }
+    }
+
+    class AnkiService {
       async encodeExternalAvif(bytes){
         const crf=clamp(Number(this.cfg.get('avifCrf')??42),0,63);
         const speed=clamp(Number(this.cfg.get('avifSpeed')??0),0,8);
@@ -1507,7 +1537,7 @@
         for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
         return btoa(binary);
       }
-      constructor(renderer,cfg){this.renderer=renderer;this.cfg=cfg;this.mediaNameCache=new Map();}
+      constructor(renderer,cfg,mediaIdentity){this.renderer=renderer;this.cfg=cfg;this.media=mediaIdentity||new AnkiMediaIdentity(cfg);}
       req(action,params={}){return fetch(ANKI_URL,{method:'POST',body:JSON.stringify({action,version:ANKI_VER,params})}).then(r=>r.json());}
       async connected(){try{return(await fetch(ANKI_URL,{method:'POST',body:JSON.stringify({action:'requestPermission',version:ANKI_VER})})).ok}catch{return false}}
       async recentNote(){const r=await this.req('findNotes',{query:'added:1'});return r.result?.length?r.result.sort((a,b)=>b-a)[0]:null;}
@@ -1567,30 +1597,8 @@
         if(!this.cfg.get('ankiTagEnabled'))return '';
         return this.cfg.get('ankiTagType')==='__custom__'?(this.cfg.get('ankiTagCustom')||'').trim():this.cfg.get('ankiTagType');
       }
-      mediaSourceKey(loader,nav){
-        const i=nav.idx,total=loader.count,dual=this.cfg.get('dualMode');
-        const cover=this.cfg.get('coverSingle')&&i===0,last=i===total-1;
-        const combined=dual&&!cover&&!last&&this.cfg.get('combineDual')&&i+1<total;
-        const indices=combined?(this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1]):[i];
-        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
-        return [
-          loader.title,
-          combined?'dual':'single',
-          indices.join(','),
-          ext,
-          this.cfg.get('ankiResize')?'resize':'native',
-          ext==='webp'?this.cfg.get('webpQuality'):('crf'+this.cfg.get('avifCrf')+'s'+this.cfg.get('avifSpeed'))
-        ].join('|');
-      }
-      mediaFilename(loader,nav){
-        const key=this.mediaSourceKey(loader,nav);
-        const cached=this.mediaNameCache.get(key);
-        if(cached)return {key,filename:cached};
-        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
-        const filename='manga_'+stableMediaToken(key)+'.'+ext;
-        this.mediaNameCache.set(key,filename);
-        return {key,filename};
-      }
+      mediaSourceKey(loader,nav){return this.media.mediaSourceKey(loader,nav);}
+      mediaFilename(loader,nav){return this.media.mediaFilename(loader,nav);}
       async update(loader,nav,sentence='',nid=null,progress=null){
         if(!await this.connected())throw new Error('AnkiConnect is not running');
         nid=nid||await this.recentNote();
@@ -1638,7 +1646,7 @@
       }
     }
 
-    class Texthooker {
+    class TexthookerController {
       constructor(els,cfg){this.els=els;this.cfg=cfg;this.ws=null;this.lines=[];try{const v=localStorage.getItem(TX_KEY);if(v)this.lines=JSON.parse(v).lines||[];}catch{}this.render();this.apply();if(!LOCAL)this.connect();}
       async connect(){try{this.ws?.close();this.ws=new WebSocket(this.cfg.get('txWsUrl'));this.ws.onopen=()=>this.els.status.classList.add('connected');this.ws.onclose=()=>this.els.status.classList.remove('connected');this.ws.onmessage=e=>{const text=String(e.data||'').trim();if(text)this.add(text);}}catch{}}
       reconnect(){this.connect();}
@@ -1656,7 +1664,7 @@
       close(){this.els.overlay.classList.remove('active');}
     }
 
-    class DropHandler {
+    class FileDropController {
       constructor(target,onFiles,onFail,visual){this.visual=visual||target;let depth=0;const stop=e=>{e.preventDefault();e.stopPropagation()};target.addEventListener('dragenter',e=>{stop(e);depth++;this.visual.classList.add('drag-active')});target.addEventListener('dragover',stop);target.addEventListener('dragleave',e=>{stop(e);if(--depth<=0){depth=0;this.visual.classList.remove('drag-active')}});target.addEventListener('drop',e=>{stop(e);depth=0;this.visual.classList.remove('drag-active');this.collect(e.dataTransfer,onFiles,onFail)});}
       async collect(dt,onFiles,onFail){const out=[];if(dt.files?.length)for(const f of dt.files)if(IMG_RE.test(f.name)||ARC_RE.test(f.name))out.push(f);const dirs=[];if(dt.items?.length)for(const it of dt.items)if(it.kind==='file')try{const e=it.webkitGetAsEntry?.();if(e?.isDirectory)dirs.push(e)}catch{}for(const d of dirs){const r=[];await this.walk(d,d.name+'/',r);out.push(...r)}if(out.length)onFiles(out);else if(dirs.length)onFail();else toast('No supported files found');}
       async walk(dir,base,out){let entries;try{entries=await this.read(dir.createReader())}catch{return}for(const e of entries){const p=base+e.name;if(e.isFile){const f=await new Promise(r=>e.file(v=>r(v),()=>r(null)));if(f&&IMG_RE.test(f.name))out.push(tagFile(f,p));}else if(e.isDirectory)await this.walk(e,p+'/',out);}}
@@ -1670,14 +1678,40 @@
       ['txWsUrl','optTxWsUrl','s'],['txFontSize','optTxFontSize','i'],['txAlign','optTxAlign','s'],['txFontFamily','optTxFontFamily','s']
     ];}
 
-    class App {
+    class AppServices {
       constructor(){
-        this.cfg=new Settings();this.loader=new ImageLoader();this.loader.publisherCombined=new Set();this.nav=new Navigation(this.cfg,this.loader);this.renderer=new ReaderRenderer($('imageFrame'),$('workCanvas'),this.cfg);this.ocr=new OcrManager(this.renderer,this.cfg,this.loader,this.nav);this.anki=new AnkiConnector(this.renderer,this.cfg);
-        this._ankiJobSeq=0;this._dualEntryIdx=null;this.tx=new Texthooker({overlay:$('txOverlay'),content:$('txContent'),status:$('txStatus'),reverse:$('txReverseBtn'),align:$('txAlignBtn')},this.cfg);
-        this.renderer.onRendered=()=>this.onRendered();this.bindAll();this.syncUI();this.refreshOfflineStatus();if(LOCAL)$('fileProtocolNotice').style.display='block';
+        this.cfg=new SettingsStore();
+        this.loader=new BookLoader();
+        this.loader.publisherCombined=new Set();
+        this.nav=new PageNavigator(this.cfg,this.loader);
+        this.renderer=new ReaderView($('imageFrame'),$('workCanvas'),this.cfg);
+        this.ocr=new OcrEngine(this.renderer,this.cfg,this.loader,this.nav);
+        this.media=new AnkiMediaIdentity(this.cfg);
+        this.anki=new AnkiService(this.renderer,this.cfg,this.media);
+        this.tx=new TexthookerController({
+          overlay:$('txOverlay'),content:$('txContent'),status:$('txStatus'),
+          reverse:$('txReverseBtn'),align:$('txAlignBtn')
+        },this.cfg);
+      }
+    }
+
+    class ReaderApp {
+      constructor(){
+        this.services=new AppServices();
+        this.cfg=this.services.cfg;
+        this.loader=this.services.loader;
+        this.nav=this.services.nav;
+        this.renderer=this.services.renderer;
+        this.ocr=this.services.ocr;
+        this.anki=this.services.anki;
+        this.tx=this.services.tx;
+        this._ankiJobSeq=0;this._dualEntryIdx=null;
+        this.renderer.onRendered=()=>this.onRendered();
+        this.bindAll();this.syncUI();this.refreshOfflineStatus();
+        if(LOCAL)$('fileProtocolNotice').style.display='block';
       }
       bindAll(){
-        new DropHandler($('fileOverlay'),fs=>{toast(`Loading ${fs.length} item${fs.length>1?'s':''}…`);this.load(fs)},()=>{$('folderInput').click()},$('dropZone'));
+        new FileDropController($('fileOverlay'),fs=>{toast(`Loading ${fs.length} item${fs.length>1?'s':''}…`);this.load(fs)},()=>{$('folderInput').click()},$('dropZone'));
         $('dropZone').onclick=()=>$('fileInput').click();$('btnSelectFile').onclick=()=>$('fileInput').click();$('btnSelectFolder').onclick=()=>$('folderInput').click();$('btnOpenOptions').onclick=()=>this.show('optionsModal');$('fileInput').onchange=e=>{this.load(e.target.files);e.target.value=''};$('folderInput').onchange=e=>{this.load(e.target.files);e.target.value=''};
         $('btnPrev').onclick=()=>this.prev();$('btnNext').onclick=()=>this.next();$('btnForwardOne').onclick=()=>this.stepFwd();$('btnBackOne').onclick=()=>this.stepBack();$('btnDual').onclick=()=>this.toggleDual();$('btnScroll').onclick=()=>this.toggleScroll();$('btnFullscreen').onclick=()=>this.toggleFS();$('btnOcr').onclick=()=>this.ocr.toggle();$('btnAnki').onclick=()=>this.openAnki();$('btnTexthooker').onclick=()=>{$('txOverlay').classList.toggle('active')};$('btnOptions').onclick=()=>this.show('optionsModal');
         $$('.tab-btn').forEach(b=>b.onclick=()=>{$$('.tab-btn').forEach(x=>x.classList.remove('selected'));$$('.tab-body').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');$('tab'+b.dataset.tab[0].toUpperCase()+b.dataset.tab.slice(1)).classList.add('selected')});
@@ -1744,7 +1778,7 @@
       }
     }
 
-    new App();
+    const JAMR_APP=new ReaderApp();
   })();
   </script>
 
@@ -1770,6 +1804,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v54: Experimental full structural refactor on branch refactor-rewrite-test: responsibility-focused component names, centralized AppServices construction, dedicated AnkiMediaIdentity for deterministic media reuse, and explicit ReaderApp bootstrap. Existing reader, OCR, MangaOCR streaming, Texthooker, export, and Anki behavior are retained, including manga_ + exactly 10 lowercase alphanumeric characters + extension naming.
   - v53: Made OCR group keys stable across relayouts so a left-click-opened OCR group keeps its active state while incremental MangaOCR (7441) results update the underlying text.
   - v52: Kept completed cached/preloaded MangaOCR results from being redundantly sent through the 7441 refinement stream; only fresh first-pass results start incremental refinement.
   - v51: Changed two-pass MangaOCR to stream per detected OCR region: the first-pass page is displayed immediately, each crop is sent to the MangaOCR WebSocket at 7441 sequentially, and each returned result replaces its corresponding first-pass text immediately instead of waiting for all regions.
