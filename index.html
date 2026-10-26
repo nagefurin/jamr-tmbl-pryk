@@ -151,6 +151,14 @@
 
       .sidebar { position:fixed; top:50%; right:0; z-index:1000; width:205px; padding:10px; transform:translateY(-50%) translateX(calc(100% - 46px)); border:1px solid var(--border); border-right:0; border-radius:14px 0 0 14px; background:rgba(18,18,21,.88); backdrop-filter:blur(15px); transition:transform .24s cubic-bezier(.16,1,.3,1); }
       .sidebar:hover { transform:translateY(-50%); }
+      .sidebar.sidebar-hidden { display:none !important; }
+      .shortcut-control { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
+      .shortcut-value { width:150px; cursor:default; }
+      .shortcut-record { min-width:68px; padding:7px 9px; white-space:nowrap; }
+      .shortcut-record.recording { border-color:var(--accent); color:#fff; background:rgba(99,102,241,.25); }
+      .fit-zoom-control { display:flex; align-items:center; justify-content:flex-end; gap:9px; width:min(310px,62%); }
+      .fit-zoom-control input { width:100%; min-width:65px; }
+      .fit-zoom-control span { width:43px; flex:0 0 43px; text-align:right; font-size:12px; color:var(--muted); }
       .sidebar-section-title { padding:5px 10px; color:var(--faint); font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; opacity:0; transition:opacity .15s; }
       .sidebar:hover .sidebar-section-title,.sidebar:hover .sidebar-btn .label { opacity:1; }
       .sidebar-btn { width:100%; display:flex; gap:11px; align-items:center; padding:9px 10px; border:0; border-radius:8px; background:transparent; color:var(--muted); cursor:pointer; transition:.13s; text-align:left; font-size:12px; }
@@ -285,19 +293,27 @@
               <div class="opt-row"><span class="opt-label">Publisher-combined page detection</span><label class="toggle-switch"><input id="optPublisherCombinedDetect" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-hint">Detects unusually large publisher spreads (for example 2400×3600 mixed with normal 1200×1800 pages) and keeps them as single pages in Dual Page mode.</div>
               <div class="opt-row"><span class="opt-label">Floaty Mode (Left-Drag Pan)</span><label class="toggle-switch"><input id="optFloatyMode" type="checkbox"><span class="toggle-slider"></span></label></div>
+              <div class="opt-row"><span class="opt-label">Show Right-Side Popup Menu (M)</span><label class="toggle-switch"><input id="optShowSidebar" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">New Page Focus</span><select id="optPageFocus" class="opt-input" style="max-width:190px"><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option><option value="preserve">Preserve Focus</option></select></div>
               <div class="opt-hint">In Single Page mode, choose where a newly opened image should start vertically. Preserve keeps the relative viewing position from the previous image.</div>
             </div>
             <div class="opt-section"><div class="opt-section-title">Fit / Scale Type</div>
-              <div class="opt-row"><span class="opt-label">Image Scale Type</span><select id="optFitMode" class="opt-input" style="max-width:220px"><option value="screen">Fit to Screen</option><option value="stretch">Stretch</option><option value="width">Fit to Width</option><option value="height">Fit to Height</option><option value="original">Original Size</option><option value="smart">Smart Fit</option></select></div>
-              <div class="opt-hint">Mihon-style scale types apply to paged Single and Dual Page modes. Smart Fit uses width for landscape images and Fit to Screen for portrait images. Scroll Mode keeps its continuous-page sizing.</div>
-              <div class="opt-row"><span class="opt-label">Fit to Screen Shortcut</span><input id="optFitScreenKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="1"></div>
-              <div class="opt-row"><span class="opt-label">Fit to Width Shortcut</span><input id="optFitWidthKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="2"></div>
-              <div class="opt-row"><span class="opt-label">Fit to Height Shortcut</span><input id="optFitHeightKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="3"></div>
-              <div class="opt-row"><span class="opt-label">Stretch Shortcut</span><input id="optFitStretchKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="4"></div>
-              <div class="opt-row"><span class="opt-label">Original Size Shortcut</span><input id="optFitOriginalKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="5"></div>
-              <div class="opt-row"><span class="opt-label">Smart Fit Shortcut</span><input id="optFitSmartKey" class="opt-input" style="width:70px" type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" value="6"></div>
-              <div class="opt-hint">Assign six different number keys from 0–9. The shortcuts also work before a book is loaded.</div>
+              <div class="opt-row"><span class="opt-label">Image Scale Type</span><select id="optFitMode" class="opt-input" style="max-width:220px"><option value="smart">Smart Fit</option><option value="screen">Fit to Screen</option><option value="stretch">Stretch</option><option value="width">Fit to Width</option><option value="height">Fit to Height</option><option value="original">Original Size</option></select></div>
+              <div class="opt-hint">Scale types apply to paged Single and Dual Page modes. Smart Fit uses width for landscape images and Fit to Screen for portrait images. Each percentage below scales that mode's normal result; 100% is unchanged. Scroll Mode keeps continuous-page sizing.</div>
+              <div class="opt-row"><span class="opt-label">Fit to Screen Shortcut</span><div class="shortcut-control"><input id="optFitScreenKey" class="opt-input shortcut-value" type="text" readonly value="1"><button type="button" class="btn shortcut-record" data-record-fit="fitScreenKey">Record</button></div></div>
+              <div class="opt-row"><span class="opt-label">Fit to Width Shortcut</span><div class="shortcut-control"><input id="optFitWidthKey" class="opt-input shortcut-value" type="text" readonly value="2"><button type="button" class="btn shortcut-record" data-record-fit="fitWidthKey">Record</button></div></div>
+              <div class="opt-row"><span class="opt-label">Fit to Height Shortcut</span><div class="shortcut-control"><input id="optFitHeightKey" class="opt-input shortcut-value" type="text" readonly value="3"><button type="button" class="btn shortcut-record" data-record-fit="fitHeightKey">Record</button></div></div>
+              <div class="opt-row"><span class="opt-label">Stretch Shortcut</span><div class="shortcut-control"><input id="optFitStretchKey" class="opt-input shortcut-value" type="text" readonly value="4"><button type="button" class="btn shortcut-record" data-record-fit="fitStretchKey">Record</button></div></div>
+              <div class="opt-row"><span class="opt-label">Original Size Shortcut</span><div class="shortcut-control"><input id="optFitOriginalKey" class="opt-input shortcut-value" type="text" readonly value="5"><button type="button" class="btn shortcut-record" data-record-fit="fitOriginalKey">Record</button></div></div>
+              <div class="opt-row"><span class="opt-label">Smart Fit Shortcut</span><div class="shortcut-control"><input id="optFitSmartKey" class="opt-input shortcut-value" type="text" readonly value="6"><button type="button" class="btn shortcut-record" data-record-fit="fitSmartKey">Record</button></div></div>
+              <div class="opt-hint">Click Record, then press a key or combination such as Alt+W or Ctrl+Shift+S. Use distinct shortcuts; M is reserved for the right-side menu. Press the same scale shortcut twice to switch back to the previous scale type.</div>
+              <div class="opt-section-title" style="margin-top:16px">Scale Zoom</div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Fit to Screen Zoom</span><div class="fit-zoom-control"><input id="optFitScreenZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitScreenZoomValue">100%</span></div></div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Fit to Width Zoom</span><div class="fit-zoom-control"><input id="optFitWidthZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitWidthZoomValue">100%</span></div></div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Fit to Height Zoom</span><div class="fit-zoom-control"><input id="optFitHeightZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitHeightZoomValue">100%</span></div></div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Stretch Zoom</span><div class="fit-zoom-control"><input id="optFitStretchZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitStretchZoomValue">100%</span></div></div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Original Size Zoom</span><div class="fit-zoom-control"><input id="optFitOriginalZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitOriginalZoomValue">100%</span></div></div>
+              <div class="opt-row fit-zoom-row"><span class="opt-label">Smart Fit Zoom</span><div class="fit-zoom-control"><input id="optFitSmartZoom" type="range" min="25" max="300" step="5" value="100"><span id="optFitSmartZoomValue">100%</span></div></div>
             </div>
             <div class="opt-section"><div class="opt-section-title">Zoom</div>
               <div class="opt-row"><span class="opt-label">Zoom Level</span><span id="optZoomValue">100%</span></div>
@@ -448,8 +464,9 @@
 
     const DEFAULTS = {
       japaneseMode:true, showProgress:true, dualMode:true, scrollMode:false, coverSingle:true,
-      snapDouble:true, publisherCombinedDetect:true, floatyMode:false, pageFocus:'top', zoomLevel:100,
-      fitMode:'screen', fitScreenKey:'1', fitWidthKey:'2', fitHeightKey:'3', fitStretchKey:'4', fitOriginalKey:'5', fitSmartKey:'6',
+      snapDouble:true, publisherCombinedDetect:true, floatyMode:false, showSidebar:true, pageFocus:'top', zoomLevel:100,
+      fitMode:'smart', fitScreenKey:'1', fitWidthKey:'2', fitHeightKey:'3', fitStretchKey:'4', fitOriginalKey:'5', fitSmartKey:'6',
+      fitScreenZoom:100, fitWidthZoom:100, fitHeightZoom:100, fitStretchZoom:100, fitOriginalZoom:100, fitSmartZoom:100,
       ankiField:'Picture', ankiMiscField:'MiscInfo', ankiFormat:'webp', ankiTagType:'doujinshi', ankiTagCustom:'',
       ankiTagEnabled:true, ankiResize:true, nsfwTag:true, infoField:true, combineDual:true, webpQuality:80, avifCrf:42, avifSpeed:4, jxlQuality:90, jxlEffort:7,
       ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrPreloadImages:3, ocrDisplay:1, ocrDebug:false, ocrBackground:'black',
@@ -465,6 +482,7 @@
           if(raw){
             const stored=JSON.parse(raw);
             this.d={...this.d,...stored};
+            if(!['fitScreenZoom','fitWidthZoom','fitHeightZoom','fitStretchZoom','fitOriginalZoom','fitSmartZoom'].every(key=>Object.prototype.hasOwnProperty.call(stored,key))&&this.d.fitMode==='screen')this.d.fitMode='smart';
             if(!Object.prototype.hasOwnProperty.call(stored,'ankiFormat')&&stored.ankiAvif)this.d.ankiFormat='avif';
           }
         } catch {}
@@ -472,6 +490,7 @@
           const injected=window.__JAMR_IMPORTED_SETTINGS__;
           if(injected&&typeof injected==='object'&&!Array.isArray(injected)){
             this.d={...DEFAULTS,...this.d,...injected};
+            if(!['fitScreenZoom','fitWidthZoom','fitHeightZoom','fitStretchZoom','fitOriginalZoom','fitSmartZoom'].every(key=>Object.prototype.hasOwnProperty.call(injected,key))&&this.d.fitMode==='screen')this.d.fitMode='smart';
             if(!Object.prototype.hasOwnProperty.call(injected,'ankiFormat')&&injected.ankiAvif)this.d.ankiFormat='avif';
           }
         } catch {}
@@ -587,20 +606,29 @@
         this.resizeObserver=new ResizeObserver(()=>{ this.reflow(); this.onRendered?.(); });
         this.resizeObserver.observe(frame);
       }
+      fitModeZoom(mode=this.cfg.get('fitMode')||'smart'){
+        const key='fit'+mode.charAt(0).toUpperCase()+mode.slice(1)+'Zoom';
+        const value=Number(this.cfg.get(key));
+        return clamp(Number.isFinite(value)?value:100,25,300)/100;
+      }
       fit(img,dualSlot=false){
         if(!img?.naturalWidth||!img?.naturalHeight) return 1;
         const width=Math.max(1,this.frame.clientWidth/(dualSlot?2:1));
         const height=Math.max(1,this.frame.clientHeight);
         const sx=width/img.naturalWidth,sy=height/img.naturalHeight;
-        const mode=this.cfg.get('fitMode')||'screen';
-        if(mode==='original'||mode==='stretch')return 1;
-        if(mode==='width')return sx;
-        if(mode==='height')return sy;
-        if(mode==='smart')return img.naturalWidth>img.naturalHeight?sx:Math.min(sx,sy);
-        return Math.min(sx,sy);
+        const mode=this.cfg.get('fitMode')||'smart';
+        const zoom=this.fitModeZoom(mode);
+        if(mode==='original'||mode==='stretch')return zoom;
+        if(mode==='width')return sx*zoom;
+        if(mode==='height')return sy*zoom;
+        if(mode==='smart')return (img.naturalWidth>img.naturalHeight?sx:Math.min(sx,sy))*zoom;
+        return Math.min(sx,sy)*zoom;
       }
       getSingleMetrics(img){
-        if(this.cfg.get('fitMode')==='stretch')return {w:this.frame.clientWidth,h:this.frame.clientHeight};
+        if(this.cfg.get('fitMode')==='stretch'){
+          const zoom=this.fitModeZoom();
+          return {w:this.frame.clientWidth*zoom,h:this.frame.clientHeight*zoom};
+        }
         const fit=this.fit(img);
         return { w:img.naturalWidth*fit, h:img.naturalHeight*fit };
       }
@@ -679,8 +707,9 @@
           const apply=()=>{
             if(!img.naturalWidth||!img.naturalHeight)return;
             if(this.cfg.get('fitMode')==='stretch'){
-              img.style.width=Math.max(1,this.frame.clientWidth/2)+'px';
-              img.style.height=Math.max(1,this.frame.clientHeight)+'px';
+              const zoom=this.fitModeZoom();
+              img.style.width=Math.max(1,this.frame.clientWidth/2*zoom)+'px';
+              img.style.height=Math.max(1,this.frame.clientHeight*zoom)+'px';
             }else{
               const scale=this.fit(img,true);
               img.style.width=Math.round(img.naturalWidth*scale)+'px';
@@ -1720,7 +1749,7 @@
     }
 
     function formMap(cfg){return [
-      ['japaneseMode','optJapaneseMode','b'],['showProgress','optShowProgress','b'],['coverSingle','optCoverSingle','b'],['snapDouble','optSnapDouble','b'],['publisherCombinedDetect','optPublisherCombinedDetect','b'],['floatyMode','optFloatyMode','b'],['pageFocus','optPageFocus','s'],['zoomLevel','optZoomLevel','i'],['fitMode','optFitMode','s'],['fitScreenKey','optFitScreenKey','s'],['fitWidthKey','optFitWidthKey','s'],['fitHeightKey','optFitHeightKey','s'],['fitStretchKey','optFitStretchKey','s'],['fitOriginalKey','optFitOriginalKey','s'],['fitSmartKey','optFitSmartKey','s'],
+      ['japaneseMode','optJapaneseMode','b'],['showProgress','optShowProgress','b'],['coverSingle','optCoverSingle','b'],['snapDouble','optSnapDouble','b'],['publisherCombinedDetect','optPublisherCombinedDetect','b'],['floatyMode','optFloatyMode','b'],['showSidebar','optShowSidebar','b'],['pageFocus','optPageFocus','s'],['zoomLevel','optZoomLevel','i'],['fitMode','optFitMode','s'],['fitScreenZoom','optFitScreenZoom','i'],['fitWidthZoom','optFitWidthZoom','i'],['fitHeightZoom','optFitHeightZoom','i'],['fitStretchZoom','optFitStretchZoom','i'],['fitOriginalZoom','optFitOriginalZoom','i'],['fitSmartZoom','optFitSmartZoom','i'],['fitScreenKey','optFitScreenKey','s'],['fitWidthKey','optFitWidthKey','s'],['fitHeightKey','optFitHeightKey','s'],['fitStretchKey','optFitStretchKey','s'],['fitOriginalKey','optFitOriginalKey','s'],['fitSmartKey','optFitSmartKey','s'],
       ['ankiField','optAnkiField','s'],['ankiMiscField','optAnkiMiscField','s'],['ankiFormat','optAnkiFormat','s'],['ankiTagType','optAnkiTagType','s'],['ankiTagCustom','optAnkiTagCustom','s'],['ankiTagEnabled','optAnkiTagEnabled','b'],['ankiResize','optAnkiResize','b'],['nsfwTag','optNsfwTag','b'],['infoField','optInfoField','b'],['combineDual','optCombineDual','b'],['webpQuality','optWebpQuality','i'],['avifCrf','optAvifCrf','i'],['avifSpeed','optAvifSpeed','i'],['jxlQuality','optJxlQuality','i'],['jxlEffort','optJxlEffort','i'],
       ['ocrUrl','optOcrUrl','s'],['ocrFontFamily','optOcrFontFamily','s'],['mangaOcrUrl','optMangaOcrUrl','s'],['ocrTwoPass','optOcrTwoPass','s'],['autoOcr','optAutoOcr','b'],['cacheOcr','optCacheOcr','b'],['ocrPreloadImages','optOcrPreloadImages','i'],['ocrDisplay','optOcrDisplay','i'],['ocrDebug','optOcrDebug','b'],['ocrBackground','optOcrBackground','s'],['ocrGroupLines','optOcrGroupLines','b'],['ocrGroupGap','optOcrGroupGap','n'],['ocrRotation','optOcrRotation','b'],['ocrGeometry','optOcrGeometry','s'],['ocrScale','optOcrScale','i'],['ocrMaxFont','optOcrMaxFont','i'],
       ['txWsUrl','optTxWsUrl','s'],['txFontSize','optTxFontSize','i'],['txAlign','optTxAlign','s'],['txFontFamily','optTxFontFamily','s']
@@ -1737,7 +1766,7 @@
         $('dropZone').onclick=()=>$('fileInput').click();$('btnSelectFile').onclick=()=>$('fileInput').click();$('btnSelectFolder').onclick=()=>$('folderInput').click();$('btnOpenOptions').onclick=()=>this.show('optionsModal');$('fileInput').onchange=e=>{this.load(e.target.files);e.target.value=''};$('folderInput').onchange=e=>{this.load(e.target.files);e.target.value=''};
         $('btnPrev').onclick=()=>this.prev();$('btnNext').onclick=()=>this.next();$('btnForwardOne').onclick=()=>this.stepFwd();$('btnBackOne').onclick=()=>this.stepBack();$('btnDual').onclick=()=>this.toggleDual();$('btnScroll').onclick=()=>this.toggleScroll();$('btnFullscreen').onclick=()=>this.toggleFS();$('btnOcr').onclick=()=>this.ocr.toggle();$('btnAnki').onclick=()=>this.openAnki();$('btnTexthooker').onclick=()=>{$('txOverlay').classList.toggle('active')};$('btnStartTexthooker').onclick=()=>{$('txOverlay').classList.toggle('active')};$('btnOptions').onclick=()=>this.show('optionsModal');
         $$('.tab-btn').forEach(b=>b.onclick=()=>{$$('.tab-btn').forEach(x=>x.classList.remove('selected'));$$('.tab-body').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');$('tab'+b.dataset.tab[0].toUpperCase()+b.dataset.tab.slice(1)).classList.add('selected')});
-        $('btnCloseOptions').onclick=()=>this.hide('optionsModal');$('btnSaveOptions').onclick=()=>this.saveOptions();$('btnExportSettings').onclick=()=>this.exportSettings();$('btnImportSettings').onclick=()=>$('settingsImportFile').click();$('settingsImportFile').onchange=e=>{const f=e.target.files[0];if(f)this.importSettings(f);e.target.value=''};$('btnOfflineCache').onclick=()=>this.enableOfflineCache();$('btnDownloadConfiguredIndex').onclick=()=>this.downloadConfiguredIndex();$('btnResetSettings').onclick=()=>this.resetSettings();$('optZoomLevel').oninput=e=>{$('optZoomValue').textContent=e.target.value+'%'};$('optOcrDisplay').oninput=e=>{$('optOcrDisplayValue').textContent=OCR_LABELS[+e.target.value]};$('optOcrScale').oninput=e=>{$('optOcrScaleValue').textContent=e.target.value+'%'};$('optOcrGroupGap').oninput=e=>{$('optOcrGroupGapValue').textContent=e.target.value+'%'};
+        $('btnCloseOptions').onclick=()=>this.hide('optionsModal');$('btnSaveOptions').onclick=()=>this.saveOptions();$('btnExportSettings').onclick=()=>this.exportSettings();$('btnImportSettings').onclick=()=>$('settingsImportFile').click();$('settingsImportFile').onchange=e=>{const f=e.target.files[0];if(f)this.importSettings(f);e.target.value=''};$('btnOfflineCache').onclick=()=>this.enableOfflineCache();$('btnDownloadConfiguredIndex').onclick=()=>this.downloadConfiguredIndex();$('btnResetSettings').onclick=()=>this.resetSettings();$('optZoomLevel').oninput=e=>{$('optZoomValue').textContent=e.target.value+'%'};$('optOcrDisplay').oninput=e=>{$('optOcrDisplayValue').textContent=OCR_LABELS[+e.target.value]};$('optOcrScale').oninput=e=>{$('optOcrScaleValue').textContent=e.target.value+'%'};$('optOcrGroupGap').oninput=e=>{$('optOcrGroupGapValue').textContent=e.target.value+'%'};$$('[data-record-fit]').forEach(button=>button.onclick=()=>{this.recordingFitKey=button.dataset.recordFit;button.textContent='Press keys…';button.classList.add('recording');toast('Press a key or combination for '+button.dataset.recordFit.replace('fit','').replace('Key','')+' shortcut',2300)});for(const mode of ['Screen','Width','Height','Stretch','Original','Smart'])$('optFit'+mode+'Zoom').oninput=e=>{$('optFit'+mode+'ZoomValue').textContent=e.target.value+'%' };
         $('btnCloseAnki').onclick=()=>this.hide('ankiModal');$('btnUpdateAnki').onclick=()=>this.updateAnki();this.bindAnkiInputs();
         $('txEdit').onclick=()=>{$('txEdit').classList.toggle('selected',this.tx.toggleEdit())};$('txClear').onclick=()=>this.tx.clear();$('txCopy').onclick=()=>this.tx.copy();$('txExport').onclick=()=>this.tx.export();$('txImport').onclick=()=>$('txImportFile').click();$('txImportFile').onchange=e=>e.target.files[0]&&this.tx.import(e.target.files[0]);$('txReconnect').onclick=()=>this.tx.reconnect();$('txClose').onclick=()=>this.tx.close();$('txReverseBtn').onclick=()=>this.tx.toggleReverse();$('txAlignBtn').onclick=()=>this.tx.toggleAlign();$('txFontSize').oninput=e=>{const v=clamp(parseInt(e.target.value)||20,8,72);this.cfg.set('txFontSize',v);this.tx.apply()};
         document.addEventListener('keydown',e=>this.key(e),true);document.querySelectorAll('.copy-command').forEach(el=>el.onclick=()=>this.copyCommand(el));window.addEventListener('resize',()=>this.syncZoomIndicator());$('sidebar').onmouseenter=()=>{if(this.loader.count)$('keyhint').classList.add('visible')};$('sidebar').onmouseleave=()=>$('keyhint').classList.remove('visible');
@@ -1753,6 +1782,78 @@
       indicators(){const total=this.loader.count,i=this.nav.idx;let p='0/0';if(total){if(this.cfg.get('scrollMode')||!this.cfg.get('dualMode'))p=`${i+1}/${total}`;else{const cover=this.cfg.get('coverSingle')&&i===0,combined=this.loader.publisherCombined||new Set(),single=cover||i===total-1||combined.has(i)||combined.has(i+1);p=cover?`Cover / ${total}`:i===total-1?`${total}/${total} · End`:single?`${i+1}/${total} · Single`:`${i+1}-${Math.min(i+2,total)}/${total}`}}$('pageText').textContent=p;$('pageIndicator').classList.toggle('visible',this.cfg.get('showProgress'));this.syncZoomIndicator()}
       syncZoomIndicator(){const z=this.renderer.zoom||1;$('zoomText').textContent=Math.round(z*100)+'%';$('zoomIndicator').classList.toggle('visible',z!==1)}
       toggleDual(){if(this.cfg.get('scrollMode')){toast('Disable scroll mode first');return;}const was=this.cfg.get('dualMode');if(!was){this._dualEntryIdx=this.nav.idx;this._dualLastIdx=this.nav.idx;this.cfg.set('dualMode',true);if(this.cfg.get('snapDouble')){const i=this.nav.idx;if(this.cfg.get('coverSingle')){if(i>0&&i%2===0)this.nav.idx=i-1;}else if(i%2!==0)this.nav.idx=i-1;}this._dualLastIdx=this.nav.idx;this.render();this.syncUI();toast('Dual Page');return;}const entry=this._dualEntryIdx??this.nav.idx;const current=this.nav.idx;const combined=this.cfg.get('publisherCombinedDetect')?(this.loader.publisherCombined||new Set()):new Set();const cover=this.cfg.get('coverSingle')&&current===0,last=current===this.loader.count-1,single=cover||last||combined.has(current)||combined.has(current+1);this.cfg.set('dualMode',false);let target=current;if(current===entry)target=entry;else if(current>entry)target=current;else target=Math.min(current+1,this.loader.count-1);if(single&&current===this.loader.count-1)target=current;this.nav.idx=clamp(target,0,Math.max(0,this.loader.count-1));this._dualEntryIdx=null;this._dualLastIdx=null;this.render();this.syncUI();toast('Single Page');} toggleScroll(){this.cfg.set('scrollMode',!this.cfg.get('scrollMode'));if(this.cfg.get('scrollMode'))this.cfg.set('dualMode',false);this.render();this.syncUI()}
+      normalizeShortcut(value){
+        let source=String(value??'').trim();
+        if(!source)return '';
+        const modifiers=new Set();
+        while(true){
+          const match=source.match(/^(Ctrl|Alt|Shift|Win)\+/i);
+          if(!match)break;
+          modifiers.add(match[1].toLowerCase());
+          source=source.slice(match[0].length);
+        }
+        if(!source)return '';
+        let key=source;
+        if(key.toLowerCase()==='space')key='Space';
+        else if(key.toLowerCase()==='escape')key='Escape';
+        else if(key.toLowerCase()==='enter')key='Enter';
+        else if(key.toLowerCase()==='tab')key='Tab';
+        else if(key.length===1&&/[a-z]/i.test(key))key=key.toUpperCase();
+        const prefix=['ctrl','alt','shift','win'].filter(mod=>modifiers.has(mod)).map(mod=>({ctrl:'Ctrl',alt:'Alt',shift:'Shift',win:'Win'}[mod]));
+        return [...prefix,key].join('+');
+      }
+      shortcutMatches(e,value){
+        const normalized=this.normalizeShortcut(value);
+        if(!normalized)return false;
+        let source=normalized;
+        const modifiers={ctrl:false,alt:false,shift:false,win:false};
+        while(true){
+          const match=source.match(/^(Ctrl|Alt|Shift|Win)\+/i);
+          if(!match)break;
+          const tag=match[1].toLowerCase();
+          modifiers[tag==='win'?'win':tag]=true;
+          source=source.slice(match[0].length);
+        }
+        const eventKey=e.key===' '?'Space':e.key;
+        const actualKey=eventKey.length===1&&/[a-z]/i.test(eventKey)?eventKey.toUpperCase():eventKey;
+        return source.toLowerCase()===String(actualKey).toLowerCase()&&modifiers.ctrl===e.ctrlKey&&modifiers.alt===e.altKey&&modifiers.shift===e.shiftKey&&modifiers.win===e.metaKey;
+      }
+      formatShortcutFromEvent(e){
+        let key=e.key===' '?'Space':e.key;
+        if(key.length===1&&/[a-z]/i.test(key))key=key.toUpperCase();
+        const parts=[];
+        if(e.ctrlKey)parts.push('Ctrl');
+        if(e.altKey)parts.push('Alt');
+        if(e.shiftKey)parts.push('Shift');
+        if(e.metaKey)parts.push('Win');
+        parts.push(key);
+        return this.normalizeShortcut(parts.join('+'));
+      }
+      activateFitShortcut(mode,key){
+        const current=this.cfg.get('fitMode')||'smart';
+        const normalized=this.normalizeShortcut(key);
+        const toggle=this._fitShortcutToggle;
+        if(toggle&&toggle.key.toLowerCase()===normalized.toLowerCase()&&toggle.targetMode===mode&&current===mode){
+          const returnMode=toggle.returnMode;
+          this._fitShortcutToggle=null;
+          this.setFitMode(returnMode);
+          return;
+        }
+        this._fitShortcutToggle={key:normalized,returnMode:current,targetMode:mode};
+        this.setFitMode(mode);
+      }
+      applySidebarVisibility(){
+        const sidebar=$('sidebar');
+        if(sidebar)sidebar.classList.toggle('sidebar-hidden',this.cfg.get('showSidebar')===false);
+      }
+      toggleSidebar(){
+        const visible=this.cfg.get('showSidebar')===false;
+        this.cfg.set('showSidebar',visible);
+        const checkbox=$('optShowSidebar');
+        if(checkbox)checkbox.checked=visible;
+        this.applySidebarVisibility();
+        toast(visible?'Right-side menu shown':'Right-side menu hidden',1500);
+      }
       fitModeInfo(mode){
         const map={
           screen:{label:'Fit to Screen',icon:'▣',key:'fitScreenKey',fallback:'1'},
@@ -1786,19 +1887,38 @@
       }
       toggleFS(){const el=$('viewport');if(!el)return;if(document.fullscreenElement){document.exitFullscreen?.().catch?.(()=>{});return}el.requestFullscreen?.({navigationUI:'hide'}).catch(()=>{});}
       syncFS(){this._fs=!!document.fullscreenElement}
-      key(e){const k=e.key.toLowerCase(),inp=['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||e.target.isContentEditable;if(k==='escape'){if($('txOverlay').classList.contains('active')){$('txOverlay').classList.remove('active');return}for(const id of ['optionsModal','ankiModal'])if($(id).style.display==='grid'){$(id).style.display='none';return}return}if(inp)return;
-        if(!e.ctrlKey&&!e.altKey&&!e.metaKey){
-          const fitShortcuts=[
-            [this.cfg.get('fitScreenKey')||'1','screen'],
-            [this.cfg.get('fitWidthKey')||'2','width'],
-            [this.cfg.get('fitHeightKey')||'3','height'],
-            [this.cfg.get('fitStretchKey')||'4','stretch'],
-            [this.cfg.get('fitOriginalKey')||'5','original'],
-            [this.cfg.get('fitSmartKey')||'6','smart']
-          ];
-          const match=fitShortcuts.find(([key])=>k===String(key).toLowerCase());
-          if(match){e.preventDefault();this.setFitMode(match[1]);return}
+      key(e){
+        const k=(e.key||'').toLowerCase();
+        if(this.recordingFitKey){
+          const reserved=['Control','Alt','Shift','Meta'];
+          if(reserved.includes(e.key))return;
+          if(e.key==='Escape'||e.key==='Tab'||e.key==='Unidentified'||e.key==='Dead'){
+            if(e.key==='Escape'){const btn=document.querySelector('[data-record-fit="'+this.recordingFitKey+'"]');if(btn){btn.textContent='Record';btn.classList.remove('recording')}this.recordingFitKey=null;e.preventDefault();e.stopPropagation();return;}
+            if(e.key==='Tab')e.preventDefault();
+            return;
+          }
+          const keyName=this.recordingFitKey;
+          const input=$('opt'+keyName.charAt(0).toUpperCase()+keyName.slice(1));
+          const button=document.querySelector('[data-record-fit="'+keyName+'"]');
+          if(input)input.value=this.formatShortcutFromEvent(e);
+          if(button){button.textContent='Record';button.classList.remove('recording')}
+          this.recordingFitKey=null;
+          e.preventDefault();e.stopPropagation();return;
         }
+        const inp=['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)||e.target.isContentEditable;
+        if(k==='escape'){if($('txOverlay').classList.contains('active')){$('txOverlay').classList.remove('active');return}for(const id of ['optionsModal','ankiModal'])if($(id).style.display==='grid'){$(id).style.display='none';return}return}
+        if(inp)return;
+        const fitShortcuts=[
+          [this.cfg.get('fitScreenKey')||'1','screen'],
+          [this.cfg.get('fitWidthKey')||'2','width'],
+          [this.cfg.get('fitHeightKey')||'3','height'],
+          [this.cfg.get('fitStretchKey')||'4','stretch'],
+          [this.cfg.get('fitOriginalKey')||'5','original'],
+          [this.cfg.get('fitSmartKey')||'6','smart']
+        ];
+        const match=fitShortcuts.find(([key])=>this.shortcutMatches(e,key));
+        if(match){e.preventDefault();e.stopPropagation();this.activateFitShortcut(match[1],match[0]);return}
+        if(k==='m'&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.shiftKey){e.preventDefault();this.toggleSidebar();return}
         if(k==='q'&&e.ctrlKey){e.preventDefault();const enabled=!this.cfg.get('autoOcr');this.cfg.set('autoOcr',enabled);if($('optAutoOcr'))$('optAutoOcr').checked=enabled;toast(enabled?'Auto OCR enabled':'Auto OCR disabled');return}if(k==='q'){e.preventDefault();if(e.shiftKey){this.ocr.processCurrent(true);}else this.ocr.toggle();return}if(k==='b'){e.preventDefault();this.ocr.cycleDisplay();return}if(k==='c'){$('txOverlay').classList.toggle('active');return}if(k==='o')this.show('optionsModal');if(k==='e'){this.openAnki();return}if(k==='f'){this.toggleFS();return}if(k==='g'&&!this.cfg.get('scrollMode')){this.toggleDual();return}if(k==='v'){this.toggleScroll();return}if(!this.loader.count)return;const single=!this.cfg.get('dualMode')||this.cfg.get('scrollMode');if(single&&(k==='w'||k==='s'||k==='arrowup'||k==='arrowdown')){const w=$('imageFrame').querySelector('.zoom-wrapper,.scroll-strip');if(w)w.scrollTop+=(k==='s'||k==='arrowdown'?80:-80);return}if(single&&!this.cfg.get('scrollMode')&&(k==='z'||k==='x')){const step=e.shiftKey?.10:.25;let z=this.renderer.zoom||1;z=clamp(z+(k==='z'?step:-step),.5,2.5);z=Math.round(z*100)/100;this.renderer.setZoom(z);this.cfg.set('zoomLevel',Math.round(z*100));$('optZoomLevel').value=Math.round(z*100);$('optZoomValue').textContent=Math.round(z*100)+'%';this.syncZoomIndicator();return}if(k===' '){e.preventDefault();this.next();return}if(this.cfg.get('dualMode')&&e.shiftKey&&(k==='a'||k==='arrowleft'||k==='d'||k==='arrowright')){e.preventDefault();if(k==='a'||k==='arrowleft')this.stepFwd();else this.stepBack();return}if(k==='a'||k==='arrowleft'){this.cfg.get('japaneseMode')?this.next():this.prev();return}if(k==='d'||k==='arrowright'){this.cfg.get('japaneseMode')?this.prev():this.next();return}}
       show(id){$(id).style.display='grid'} hide(id){$(id).style.display='none'}
       async copyCommand(el){const text=el.dataset.copy||el.textContent.trim();try{await navigator.clipboard.writeText(text);}catch{try{const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}catch{toast('Copy failed',2200);return}}const old=el.textContent;el.textContent='Copied';setTimeout(()=>{el.textContent=old},900);}
@@ -1806,11 +1926,11 @@
       async downloadConfiguredIndex(){try{const latestUrl='https://nagefurin.github.io/jamr-tmbl-pryk/index.html';const response=await fetch(latestUrl,{cache:'no-store'});if(!response.ok)throw new Error('GitHub Pages returned HTTP '+response.status);let html=await response.text();const json=JSON.stringify(this.cfg.d).replace(/</g,'\\u003c');const bootstrap=`<scr`+`ipt>window.__JAMR_IMPORTED_SETTINGS__=${json};try{localStorage.setItem('tumbal_refactor_v3',JSON.stringify(${json}))}catch{}</scr`+`ipt>\n`;if(html.includes('</head>'))html=html.replace('</head>',bootstrap+'</head>');else html=bootstrap+html;const blob=new Blob([html],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='index.html';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Latest index.html downloaded with current settings',3000);}catch(e){console.error(e);toast('Could not download latest index.html: '+(e.message||e),3500);}}
       refreshOfflineStatus(){const el=$('offlineCacheStatus');if(!el)return;if(LOCAL||!window.isSecureContext||!('serviceWorker' in navigator)||!('caches' in window)){el.textContent='Offline cache requires the GitHub Pages HTTPS version of the app.';return;}caches.open('jamr-tmbl-pryk-shell-v1').then(cache=>cache.match(new URL('./index.html',location.href).href)).then(hit=>{el.textContent=hit?'Offline cache available.':'Offline cache not yet saved.'}).catch(()=>{el.textContent='Offline cache status unavailable.'});}
       exportSettings(){try{const data={app:'jamr-tmbl-pryk',formatVersion:1,exportedAt:new Date().toISOString(),settings:this.cfg.d};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jamr-tmbl-pryk-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Settings exported');}catch(e){console.error(e);toast('Could not export settings',2600);}}
-      async importSettings(file){try{const data=JSON.parse(await file.text());const incoming=data?.settings;if(!incoming||typeof incoming!=='object'||Array.isArray(incoming))throw new Error('Invalid settings file');const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');this.cfg.d={...DEFAULTS,...incoming};if(!Object.prototype.hasOwnProperty.call(incoming,'ankiFormat')&&incoming.ankiAvif)this.cfg.d.ankiFormat='avif';delete this.cfg.d.ankiAvif;delete this.cfg.d.ankiSentenceField;delete this.cfg.d.ankiSentenceEnabled;try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(this.cfg.d));}catch{}this.syncUI();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();toast('Settings imported');}catch(e){console.error(e);toast('Invalid settings file: '+(e.message||e),3200);}}
+      async importSettings(file){try{const data=JSON.parse(await file.text());const incoming=data?.settings;if(!incoming||typeof incoming!=='object'||Array.isArray(incoming))throw new Error('Invalid settings file');const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');this.cfg.d={...DEFAULTS,...incoming};if(!['fitScreenZoom','fitWidthZoom','fitHeightZoom','fitStretchZoom','fitOriginalZoom','fitSmartZoom'].every(key=>Object.prototype.hasOwnProperty.call(incoming,key))&&this.cfg.d.fitMode==='screen')this.cfg.d.fitMode='smart';if(!Object.prototype.hasOwnProperty.call(incoming,'ankiFormat')&&incoming.ankiAvif)this.cfg.d.ankiFormat='avif';delete this.cfg.d.ankiAvif;delete this.cfg.d.ankiSentenceField;delete this.cfg.d.ankiSentenceEnabled;try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(this.cfg.d));}catch{}this.syncUI();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();toast('Settings imported');}catch(e){console.error(e);toast('Invalid settings file: '+(e.message||e),3200);}}
       async enableOfflineCache(){const status=$('offlineCacheStatus');try{if(LOCAL||!window.isSecureContext||!('serviceWorker' in navigator)||!('caches' in window))throw new Error('Open the GitHub Pages HTTPS version to enable offline caching.');if(status)status.textContent='Fetching latest index.html from GitHub Pages…';const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});await reg.update().catch(()=>{});const latestUrl='https://nagefurin.github.io/jamr-tmbl-pryk/index.html';const response=await fetch(latestUrl,{cache:'no-store'});if(!response.ok)throw new Error('GitHub Pages returned HTTP '+response.status);const cache=await caches.open('jamr-tmbl-pryk-shell-v1');const indexUrl=new URL('./index.html',location.href).href;const rootUrl=new URL('./',location.href).href;await cache.put(new Request(indexUrl),response.clone());await cache.put(new Request(rootUrl),response.clone());const worker=reg.active||reg.waiting||reg.installing;if(worker)worker.postMessage({type:'CACHE_LATEST',url:latestUrl});if(status)status.textContent='Offline cache saved. Latest GitHub Pages index.html was fetched successfully.';toast('Offline cache refreshed',2200);}catch(e){console.error(e);if(status)status.textContent='Offline cache failed: '+(e.message||e);toast('Offline cache failed',3000);}}
       syncAnkiOptions(){const enabled=this.cfg.get('ankiTagEnabled'),custom=this.cfg.get('ankiTagType')==='__custom__';for(const id of ['optAnkiTagType','ankiTagTypeInput'])$(id).disabled=!enabled;for(const id of ['optAnkiTagCustom','ankiTagCustomInput'])$(id).disabled=!enabled||!custom;}
-      syncUI(){for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')e.checked=this.cfg.get(key);else e.value=this.cfg.get(key)}$('optZoomValue').textContent=this.cfg.get('zoomLevel')+'%';$('keyhint').textContent=`A/D: page · W/S: scroll · Z/X: zoom · Fit ${['fitScreenKey','fitWidthKey','fitHeightKey','fitStretchKey','fitOriginalKey','fitSmartKey'].map(k=>this.cfg.get(k)).join('/')} · G: dual · V: scroll · Q: OCR · B: OCR display · C: text · E: Anki · O: options · F: fullscreen`;$('optOcrDisplayValue').textContent=OCR_LABELS[this.cfg.get('ocrDisplay')];$('optOcrScaleValue').textContent=this.cfg.get('ocrScale')+'%';$('optOcrGroupGapValue').textContent=this.cfg.get('ocrGroupGap')+'%';$('txFontSize').value=this.cfg.get('txFontSize');$('btnDual').classList.toggle('selected',this.cfg.get('dualMode'));$('btnScroll').classList.toggle('selected',this.cfg.get('scrollMode'));this.syncAnkiOptions();this.indicators();}
-      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.ocrPreloadImages=clamp(Number(vals.ocrPreloadImages),0,20);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);vals.jxlQuality=clamp(Number(vals.jxlQuality),1,100);vals.jxlEffort=clamp(Number(vals.jxlEffort),1,9);const fitModeChanged=vals.fitMode!==this.cfg.get('fitMode');const fitKeys=[vals.fitScreenKey,vals.fitWidthKey,vals.fitHeightKey,vals.fitStretchKey,vals.fitOriginalKey,vals.fitSmartKey].map(v=>String(v??'').trim());if(fitKeys.some(k=>!/^[0-9]$/.test(k))||new Set(fitKeys).size!==fitKeys.length){toast('Fit shortcuts must be six different number keys (0–9)',2400);return;}[vals.fitScreenKey,vals.fitWidthKey,vals.fitHeightKey,vals.fitStretchKey,vals.fitOriginalKey,vals.fitSmartKey]=fitKeys;if(fitModeChanged)vals.zoomLevel=100;this.cfg.patch(vals);this.renderer.zoom=this.renderer.getBaseZoom();if(fitModeChanged&&this.loader.count&&!this.cfg.get('scrollMode'))this.render();else this.renderer.reflow();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();if(fitModeChanged)this.showFitModeToast(this.cfg.get('fitMode'));else toast('Options applied')}
+      syncUI(){for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')e.checked=this.cfg.get(key);else e.value=this.cfg.get(key)}$('optZoomValue').textContent=this.cfg.get('zoomLevel')+'%';for(const mode of ['Screen','Width','Height','Stretch','Original','Smart'])$('optFit'+mode+'ZoomValue').textContent=this.cfg.get('fit'+mode+'Zoom')+'%';$('keyhint').textContent=`A/D: page · W/S: scroll · Z/X: zoom · Fit ${['fitScreenKey','fitWidthKey','fitHeightKey','fitStretchKey','fitOriginalKey','fitSmartKey'].map(k=>this.cfg.get(k)).join('/')} · M: menu · G: dual · V: scroll · Q: OCR · B: OCR display · C: text · E: Anki · O: options · F: fullscreen`;$('optOcrDisplayValue').textContent=OCR_LABELS[this.cfg.get('ocrDisplay')];$('optOcrScaleValue').textContent=this.cfg.get('ocrScale')+'%';$('optOcrGroupGapValue').textContent=this.cfg.get('ocrGroupGap')+'%';$('txFontSize').value=this.cfg.get('txFontSize');$('btnDual').classList.toggle('selected',this.cfg.get('dualMode'));$('btnScroll').classList.toggle('selected',this.cfg.get('scrollMode'));this.applySidebarVisibility();this.syncAnkiOptions();this.indicators();}
+      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.ocrPreloadImages=clamp(Number(vals.ocrPreloadImages),0,20);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);vals.jxlQuality=clamp(Number(vals.jxlQuality),1,100);vals.jxlEffort=clamp(Number(vals.jxlEffort),1,9);const fitModeChanged=vals.fitMode!==this.cfg.get('fitMode');const fitScaleZoomKeys=['fitScreenZoom','fitWidthZoom','fitHeightZoom','fitStretchZoom','fitOriginalZoom','fitSmartZoom'];for(const key of fitScaleZoomKeys)vals[key]=clamp(Number(vals[key])||100,25,300);const fitScaleChanged=fitScaleZoomKeys.some(key=>Number(vals[key])!==Number(this.cfg.get(key)));const fitKeys=[vals.fitScreenKey,vals.fitWidthKey,vals.fitHeightKey,vals.fitStretchKey,vals.fitOriginalKey,vals.fitSmartKey].map(v=>this.normalizeShortcut(v));if(fitKeys.some(k=>!k)||new Set(fitKeys.map(k=>k.toLowerCase())).size!==fitKeys.length||fitKeys.includes('M')){toast('Use six distinct fit shortcuts. M is reserved for the right-side menu.',2600);return;}[vals.fitScreenKey,vals.fitWidthKey,vals.fitHeightKey,vals.fitStretchKey,vals.fitOriginalKey,vals.fitSmartKey]=fitKeys;if(fitModeChanged)vals.zoomLevel=100;this._fitShortcutToggle=null;this.cfg.patch(vals);this.renderer.zoom=this.renderer.getBaseZoom();if((fitModeChanged||fitScaleChanged)&&this.loader.count&&!this.cfg.get('scrollMode'))this.render();else this.renderer.reflow();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();if(fitModeChanged)this.showFitModeToast(this.cfg.get('fitMode'));else toast('Options applied')}
       openAnki(){if(!this.loader.count)return;this.show('ankiModal');$('ankiError').style.display='none';for(const [key,id,t] of [['ankiField','ankiFieldInput','s'],['ankiMiscField','ankiMiscFieldInput','s'],['ankiTagType','ankiTagTypeInput','s'],['ankiTagCustom','ankiTagCustomInput','s'],['ankiTagEnabled','ankiTagEnabledInput','b'],['ankiResize','ankiResizeInput','b'],['nsfwTag','ankiNsfwInput','b']]){const e=$(id);e[t==='b'?'checked':'value']=this.cfg.get(key)}this.syncAnkiOptions();const pv=$('ankiPreview');pv.innerHTML='';const i=this.nav.idx,cover=this.cfg.get('coverSingle')&&i===0,last=i===this.loader.count-1,combined=this.cfg.get('publisherCombinedDetect')?(this.loader.publisherCombined||new Set()):new Set(),singleByResolution=combined.has(i)||combined.has(i+1);if(this.cfg.get('dualMode')&&!cover&&!last&&!singleByResolution){const order=this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1];for(const n of order){const m=document.createElement('img');m.src=this.loader.get(n);pv.appendChild(m)}}else{const m=document.createElement('img');m.src=this.loader.get(i);pv.appendChild(m)}$('ankiMiscContent').textContent=`Source: ${this.loader.title}`}
       async updateAnki(){
         try{
@@ -1871,6 +1991,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v58: Made Smart Fit the default (including migration of older saved settings), added an independent 25–300% zoom multiplier for each fit type, changed fit hotkeys to record any key or modifier combination, added double-press return to the previous fit type, and added the configurable right-side menu visibility toggle on M.
   - v57: Moved fit-mode feedback into an animated top-right toast and expanded image scaling to Mihon-style Fit Screen, Stretch, Fit Width, Fit Height, Original Size, and Smart Fit modes with six configurable numeric shortcuts.
   - v56: Added Screen/Width/Height fit presets with configurable number-key shortcuts, made Texthooker available before a book is loaded, removed unused Anki sentence-field controls/plumbing, added JXL input/export alongside WebP and AVIF, and renamed the encoder helper to tmbl-helper.py while preserving the deterministic manga_ + 10-character media filename scheme.
   - v55: Restored F/button fullscreen to the browser Fullscreen API so the reader visibly enters true browser fullscreen again; browser-managed Escape exit remains standard Fullscreen behavior.
