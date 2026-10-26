@@ -329,7 +329,7 @@
               <div class="opt-row"><span class="opt-label">Update Misc Info</span><label class="toggle-switch"><input id="optInfoField" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">Combine Dual Pages</span><label class="toggle-switch"><input id="optCombineDual" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">Anki Image Format</span><select id="optAnkiFormat" class="opt-input" style="max-width:220px"><option value="webp">WebP (browser encoder)</option><option value="avif">AVIF (FFmpeg)</option><option value="jxl">JPEG XL (JXL)</option></select></div>
-              <div class="opt-hint">WebP uses Chrome's built-in encoder. AVIF and JXL use avif_helper.py at 127.0.0.1:7332. AVIF requires FFmpeg/libaom-av1; JXL requires cjxl or FFmpeg/libjxl.</div>
+              <div class="opt-hint">WebP uses Chrome's built-in encoder. AVIF and JXL use tmbl-helper.py at 127.0.0.1:7332. AVIF requires FFmpeg/libaom-av1; JXL requires cjxl or FFmpeg/libjxl.</div>
               <div class="opt-hint">AVIF default: CRF 42 + CPU-used 4. Lower CPU-used values encode more slowly; higher values encode faster.</div>
             </div>
             <div class="opt-section"><div class="opt-section-title">Quality</div>
@@ -1514,7 +1514,7 @@
         });
         let r;
         try{r=await fetch('http://127.0.0.1:7332/encode?'+params.toString(),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:bytes});}
-        catch(e){throw new Error('AVIF/JXL helper is not running. Start avif_helper.py first.');}
+        catch(e){throw new Error('AVIF/JXL helper is not running. Start tmbl-helper.py first.');}
         if(!r.ok){
           let msg=`${fmt.toUpperCase()} helper failed (HTTP ${r.status})`;
           try{const j=await r.json();if(j?.error)msg+=`: ${j.error}`;}catch{}
@@ -1788,6 +1788,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v57: Renamed the combined AVIF/JXL encoder helper from avif_helper.py to tmbl-helper.py and updated the reader's setup and error text; encoding behavior and options remain unchanged.
   - v56: Added JXL as an optional Anki image format alongside WebP and AVIF, including quality/effort options, deterministic .jxl media naming, legacy AVIF-setting migration, .jxl input recognition, and JXL encoding through the existing localhost helper.
   - v55: Restored F/button fullscreen to the browser Fullscreen API so the reader visibly enters true browser fullscreen again; browser-managed Escape exit remains standard Fullscreen behavior.
   - v53: Made OCR group keys stable across relayouts so a left-click-opened OCR group keeps its active state while incremental MangaOCR (7441) results update the underlying text.
