@@ -212,12 +212,12 @@
     <div class="file-panel">
       <h1 class="file-title">Tumbal Proyek</h1>
       <div id="fileProtocolNotice" class="file-protocol-notice">Running from file://. Use Select Folder if browser drag-and-drop cannot read a directory.</div>
-      <input id="fileInput" class="file-input-hidden" type="file" accept=".zip,.cbz,.epub,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif" multiple>
+      <input id="fileInput" class="file-input-hidden" type="file" accept=".zip,.cbz,.epub,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.jxl" multiple>
       <input id="folderInput" class="file-input-hidden" type="file" webkitdirectory directory multiple>
       <div id="dropZone" class="drop-zone">
         <div class="drop-zone-icon">📚</div>
         <div class="drop-zone-title">Drop manga files, archives, or a folder</div>
-        <div class="drop-zone-formats">ZIP / CBZ / EPUB · JPG / PNG / WEBP / GIF / BMP / AVIF</div>
+        <div class="drop-zone-formats">ZIP / CBZ / EPUB · JPG / PNG / WEBP / GIF / BMP / AVIF / JXL</div>
       </div>
       <div class="btn-row" style="margin-top:14px">
         <button id="btnSelectFile" class="btn">📄 Select Files</button>
@@ -328,14 +328,20 @@
               <div class="opt-row"><span class="opt-label">Mark as NSFW</span><label class="toggle-switch"><input id="optNsfwTag" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">Update Misc Info</span><label class="toggle-switch"><input id="optInfoField" type="checkbox" checked><span class="toggle-slider"></span></label></div>
               <div class="opt-row"><span class="opt-label">Combine Dual Pages</span><label class="toggle-switch"><input id="optCombineDual" type="checkbox" checked><span class="toggle-slider"></span></label></div>
-              <div class="opt-row"><span class="opt-label">Experimental: AVIF via FFmpeg</span><label class="toggle-switch"><input id="optAnkiAvif" type="checkbox"><span class="toggle-slider"></span></label></div>
-              <div class="opt-hint">Uses the local AVIF helper on 127.0.0.1:7332 and your installed FFmpeg/libaom-av1. Disabled by default.</div><div class="opt-hint">Default: CRF 42 + CPU-used 4. Lower CPU-used values encode more slowly; higher values encode faster.</div>
+              <div class="opt-row"><span class="opt-label">Anki Image Format</span><select id="optAnkiFormat" class="opt-input" style="max-width:220px"><option value="webp">WebP (browser encoder)</option><option value="avif">AVIF (FFmpeg)</option><option value="jxl">JPEG XL (JXL)</option></select></div>
+              <div class="opt-hint">WebP uses Chrome's built-in encoder. AVIF and JXL use avif_helper.py at 127.0.0.1:7332. AVIF requires FFmpeg/libaom-av1; JXL requires cjxl or FFmpeg/libjxl.</div>
+              <div class="opt-hint">AVIF default: CRF 42 + CPU-used 4. Lower CPU-used values encode more slowly; higher values encode faster.</div>
             </div>
             <div class="opt-section"><div class="opt-section-title">Quality</div>
               <div class="opt-row"><span class="opt-label">WebP Quality</span><input id="optWebpQuality" class="opt-input" style="width:90px" type="number" min="1" max="100" step="1" value="80"></div>
               <div class="opt-row"><span class="opt-label">AVIF CRF</span><input id="optAvifCrf" class="opt-input" style="width:90px" type="number" min="1" max="63" step="1" value="42"></div>
               <div class="opt-row"><span class="opt-label">AVIF CPU-used</span><input id="optAvifSpeed" class="opt-input" style="width:90px" type="number" min="0" max="8" step="1" value="4"></div>
+              <div class="opt-row"><span class="opt-label">JXL Quality</span><input id="optJxlQuality" class="opt-input" style="width:90px" type="number" min="1" max="100" step="1" value="90"></div>
+              <div class="opt-row"><span class="opt-label">JXL Effort</span><input id="optJxlEffort" class="opt-input" style="width:90px" type="number" min="1" max="9" step="1" value="7"></div>
               <div class="opt-hint">WebP Quality: 1 is the lowest quality/smallest output; 100 is maximum encoder quality. Browser WebP encoding does not guarantee mathematically lossless output at 100.</div>
+              <div class="opt-hint">AVIF CRF: lower values produce higher quality and larger files; higher values produce lower quality and smaller files. Valid range: 1–63.</div>
+              <div class="opt-hint">AVIF CPU-used: 0 is the slowest and most compression-efficient setting; 8 is the fastest. Higher values trade encoding time for compression efficiency.</div>
+              <div class="opt-hint">JXL Quality: 1–100; higher values preserve more detail. JXL Effort: 1 is faster, 9 spends more time trying to compress better.</div>
               <div class="opt-hint">AVIF CRF: lower values produce higher quality and larger files; higher values produce lower quality and smaller files. Valid range: 1–63.</div>
               <div class="opt-hint">AVIF CPU-used: 0 is the slowest and most compression-efficient setting; 8 is the fastest. Higher values trade encoding time for compression efficiency.</div>
             </div>
@@ -413,7 +419,7 @@
     const $$ = sel => [...document.querySelectorAll(sel)];
     const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
     const natSort = (a,b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'});
-    const IMG_RE = /\.(jpg|jpeg|png|gif|webp|bmp|avif)$/i;
+    const IMG_RE = /\.(jpg|jpeg|png|gif|webp|bmp|avif|jxl)$/i;
     const ARC_RE = /\.(zip|cbz|epub)$/i;
     const ANKI_URL = 'http://127.0.0.1:8765';
     const ANKI_VER = 6;
@@ -427,7 +433,7 @@
       japaneseMode:true, showProgress:true, dualMode:true, scrollMode:false, coverSingle:true,
       snapDouble:true, publisherCombinedDetect:true, floatyMode:false, pageFocus:'top', zoomLevel:175,
       ankiField:'Picture', ankiMiscField:'MiscInfo', ankiSentenceField:'', ankiSentenceEnabled:false, ankiTagType:'doujinshi', ankiTagCustom:'',
-      ankiTagEnabled:true, ankiResize:true, nsfwTag:true, infoField:true, combineDual:true, webpQuality:80, ankiAvif:false, avifCrf:42, avifSpeed:4,
+      ankiTagEnabled:true, ankiResize:true, nsfwTag:true, infoField:true, combineDual:true, webpQuality:80, ankiFormat:'webp', avifCrf:42, avifSpeed:4, jxlQuality:90, jxlEffort:7,
       ocrUrl:'ws://127.0.0.1:7331', mangaOcrUrl:'ws://127.0.0.1:7441', ocrTwoPass:'owocr', autoOcr:true, cacheOcr:true, ocrPreloadImages:3, ocrDisplay:1, ocrDebug:false, ocrBackground:'black',
       ocrGroupLines:true, ocrGroupGap:2, ocrRotation:true, ocrGeometry:'auto', ocrFontFamily:'BIZ UDGothic', ocrScale:100, ocrMaxFont:54,
       txWsUrl:'ws://127.0.0.1:6677', txFontSize:50, txAlign:'center', txFontFamily:'BIZ UDGothic', txReversed:false
@@ -436,8 +442,23 @@
     class Settings {
       constructor(){
         this.d = {...DEFAULTS};
-        try { const v=localStorage.getItem(SETTINGS_KEY); if(v) this.d={...this.d,...JSON.parse(v)}; } catch {}
-        try { const injected=window.__JAMR_IMPORTED_SETTINGS__; if(injected&&typeof injected==='object'&&!Array.isArray(injected)) this.d={...DEFAULTS,...this.d,...injected}; } catch {}
+        try {
+          const v=localStorage.getItem(SETTINGS_KEY);
+          if(v){
+            const stored=JSON.parse(v);
+            this.d={...this.d,...stored};
+            if(!Object.prototype.hasOwnProperty.call(stored,'ankiFormat')&&Object.prototype.hasOwnProperty.call(stored,'ankiAvif'))this.d.ankiFormat=stored.ankiAvif?'avif':'webp';
+            delete this.d.ankiAvif;
+          }
+        } catch {}
+        try {
+          const injected=window.__JAMR_IMPORTED_SETTINGS__;
+          if(injected&&typeof injected==='object'&&!Array.isArray(injected)){
+            this.d={...DEFAULTS,...this.d,...injected};
+            if(!Object.prototype.hasOwnProperty.call(injected,'ankiFormat')&&Object.prototype.hasOwnProperty.call(injected,'ankiAvif'))this.d.ankiFormat=injected.ankiAvif?'avif':'webp';
+            delete this.d.ankiAvif;
+          }
+        } catch {}
       }
       get(k){ return this.d[k]; }
       set(k,v){ this.d[k]=v; try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(this.d));}catch{} }
@@ -1482,23 +1503,25 @@
     }
 
     class AnkiConnector {
-      async encodeExternalAvif(bytes){
-        const crf=clamp(Number(this.cfg.get('avifCrf')??42),0,63);
-        const speed=clamp(Number(this.cfg.get('avifSpeed')??0),0,8);
-        const url=`http://127.0.0.1:7332/encode?crf=${crf}&speed=${speed}`;
+      async encodeExternalFormat(bytes,format=this.cfg.get('ankiFormat')||'webp'){
+        const fmt=String(format||'webp').toLowerCase();
+        const params=new URLSearchParams({
+          format:fmt,
+          crf:String(clamp(Number(this.cfg.get('avifCrf')??42),0,63)),
+          speed:String(clamp(Number(this.cfg.get('avifSpeed')??4),0,8)),
+          quality:String(clamp(Number(this.cfg.get('jxlQuality')??90),1,100)),
+          effort:String(clamp(Number(this.cfg.get('jxlEffort')??7),1,9))
+        });
         let r;
-        try{
-          r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:bytes});
-        }catch(e){
-          throw new Error('AVIF helper is not running. Start avif_helper.py first.');
-        }
+        try{r=await fetch('http://127.0.0.1:7332/encode?'+params.toString(),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:bytes});}
+        catch(e){throw new Error('AVIF/JXL helper is not running. Start avif_helper.py first.');}
         if(!r.ok){
-          let msg=`AVIF helper failed (HTTP ${r.status})`;
+          let msg=`${fmt.toUpperCase()} helper failed (HTTP ${r.status})`;
           try{const j=await r.json();if(j?.error)msg+=`: ${j.error}`;}catch{}
           throw new Error(msg);
         }
         const out=new Uint8Array(await r.arrayBuffer());
-        if(!out.length)throw new Error('AVIF helper returned empty data');
+        if(!out.length)throw new Error(fmt.toUpperCase()+' helper returned empty data');
         return this.bytesToBase64(out);
       }
       bytesToBase64(bytes){
@@ -1523,9 +1546,9 @@
         cv.width=w;cv.height=h;
         ctx.clearRect(0,0,w,h);
         ctx.drawImage(img,0,0,w,h);
-        if(this.cfg.get('ankiAvif')){
+        if((this.cfg.get('ankiFormat')||'webp')!=='webp'){
           const png=await this.canvasBytes('image/png');
-          return this.encodeExternalAvif(png);
+          return this.encodeExternalFormat(png,this.cfg.get('ankiFormat'));
         }
         return new Promise((resolve,reject)=>cv.toBlob(b=>{
           if(!b){reject(new Error('Browser could not encode image'));return}
@@ -1549,9 +1572,9 @@
         ctx.fillStyle='#111';ctx.fillRect(0,0,cv.width,cv.height);
         ctx.drawImage(i1,0,0,w1,h1);
         ctx.drawImage(i2,w1,0,w2,h2);
-        if(this.cfg.get('ankiAvif')){
+        if((this.cfg.get('ankiFormat')||'webp')!=='webp'){
           const png=await this.canvasBytes('image/png');
-          return this.encodeExternalAvif(png);
+          return this.encodeExternalFormat(png,this.cfg.get('ankiFormat'));
         }
         return new Promise((resolve,reject)=>cv.toBlob(b=>{
           if(!b){reject(new Error('Browser could not encode image'));return}
@@ -1572,21 +1595,15 @@
         const cover=this.cfg.get('coverSingle')&&i===0,last=i===total-1;
         const combined=dual&&!cover&&!last&&this.cfg.get('combineDual')&&i+1<total;
         const indices=combined?(this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1]):[i];
-        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
-        return [
-          loader.title,
-          combined?'dual':'single',
-          indices.join(','),
-          ext,
-          this.cfg.get('ankiResize')?'resize':'native',
-          ext==='webp'?this.cfg.get('webpQuality'):('crf'+this.cfg.get('avifCrf')+'s'+this.cfg.get('avifSpeed'))
-        ].join('|');
+        const ext=this.cfg.get('ankiFormat')||'webp';
+        const encoderSettings=ext==='webp'?'q'+this.cfg.get('webpQuality'):ext==='avif'?'crf'+this.cfg.get('avifCrf')+'s'+this.cfg.get('avifSpeed'):'q'+this.cfg.get('jxlQuality')+'e'+this.cfg.get('jxlEffort');
+        return [loader.title,combined?'dual':'single',indices.join(','),ext,this.cfg.get('ankiResize')?'resize':'native',encoderSettings].join('|');
       }
       mediaFilename(loader,nav){
         const key=this.mediaSourceKey(loader,nav);
         const cached=this.mediaNameCache.get(key);
         if(cached)return {key,filename:cached};
-        const ext=this.cfg.get('ankiAvif')?'avif':'webp';
+        const ext=this.cfg.get('ankiFormat')||'webp';
         const filename='manga_'+stableMediaToken(key)+'.'+ext;
         this.mediaNameCache.set(key,filename);
         return {key,filename};
@@ -1601,13 +1618,13 @@
         if(dual&&!cover&&!last&&this.cfg.get('combineDual')){
           let a=loader.get(i),b=loader.get(i+1);
           if(this.cfg.get('japaneseMode'))[a,b]=[b,a];
-          progress?.(this.cfg.get('ankiAvif')?'Encoding AVIF…':'Encoding WebP…');
+          progress?.('Encoding '+String(this.cfg.get('ankiFormat')||'webp').toUpperCase()+'…');
           b64=await this.combine(a,b);
         }else{
           const img=await loadImg(loader.get(i));
           let w=img.naturalWidth,h=img.naturalHeight;
           if(this.cfg.get('ankiResize')&&w>1280){h=Math.round(h*1280/w);w=1280;}
-          progress?.(this.cfg.get('ankiAvif')?'Encoding AVIF…':'Encoding WebP…');
+          progress?.('Encoding '+String(this.cfg.get('ankiFormat')||'webp').toUpperCase()+'…');
           b64=await this.imageB64(img,w,h);
         }
         progress?.('Preparing media file…');
@@ -1665,7 +1682,7 @@
 
     function formMap(cfg){return [
       ['japaneseMode','optJapaneseMode','b'],['showProgress','optShowProgress','b'],['coverSingle','optCoverSingle','b'],['snapDouble','optSnapDouble','b'],['publisherCombinedDetect','optPublisherCombinedDetect','b'],['floatyMode','optFloatyMode','b'],['pageFocus','optPageFocus','s'],['zoomLevel','optZoomLevel','i'],
-      ['ankiField','optAnkiField','s'],['ankiMiscField','optAnkiMiscField','s'],['ankiSentenceField','optAnkiSentenceField','s'],['ankiSentenceEnabled','optAnkiSentenceEnabled','b'],['ankiTagType','optAnkiTagType','s'],['ankiTagCustom','optAnkiTagCustom','s'],['ankiTagEnabled','optAnkiTagEnabled','b'],['ankiResize','optAnkiResize','b'],['nsfwTag','optNsfwTag','b'],['infoField','optInfoField','b'],['combineDual','optCombineDual','b'],['ankiAvif','optAnkiAvif','b'],['webpQuality','optWebpQuality','i'],['avifCrf','optAvifCrf','i'],['avifSpeed','optAvifSpeed','i'],
+      ['ankiField','optAnkiField','s'],['ankiMiscField','optAnkiMiscField','s'],['ankiSentenceField','optAnkiSentenceField','s'],['ankiSentenceEnabled','optAnkiSentenceEnabled','b'],['ankiTagType','optAnkiTagType','s'],['ankiTagCustom','optAnkiTagCustom','s'],['ankiTagEnabled','optAnkiTagEnabled','b'],['ankiResize','optAnkiResize','b'],['nsfwTag','optNsfwTag','b'],['infoField','optInfoField','b'],['combineDual','optCombineDual','b'],['ankiFormat','optAnkiFormat','s'],['webpQuality','optWebpQuality','i'],['avifCrf','optAvifCrf','i'],['avifSpeed','optAvifSpeed','i'],['jxlQuality','optJxlQuality','i'],['jxlEffort','optJxlEffort','i'],
       ['ocrUrl','optOcrUrl','s'],['ocrFontFamily','optOcrFontFamily','s'],['mangaOcrUrl','optMangaOcrUrl','s'],['ocrTwoPass','optOcrTwoPass','s'],['autoOcr','optAutoOcr','b'],['cacheOcr','optCacheOcr','b'],['ocrPreloadImages','optOcrPreloadImages','i'],['ocrDisplay','optOcrDisplay','i'],['ocrDebug','optOcrDebug','b'],['ocrBackground','optOcrBackground','s'],['ocrGroupLines','optOcrGroupLines','b'],['ocrGroupGap','optOcrGroupGap','n'],['ocrRotation','optOcrRotation','b'],['ocrGeometry','optOcrGeometry','s'],['ocrScale','optOcrScale','i'],['ocrMaxFont','optOcrMaxFont','i'],
       ['txWsUrl','optTxWsUrl','s'],['txFontSize','optTxFontSize','i'],['txAlign','optTxAlign','s'],['txFontFamily','optTxFontFamily','s']
     ];}
@@ -1706,11 +1723,11 @@
       async downloadConfiguredIndex(){try{const latestUrl='https://nagefurin.github.io/jamr-tmbl-pryk/index.html';const response=await fetch(latestUrl,{cache:'no-store'});if(!response.ok)throw new Error('GitHub Pages returned HTTP '+response.status);let html=await response.text();const json=JSON.stringify(this.cfg.d).replace(/</g,'\\u003c');const bootstrap=`<scr`+`ipt>window.__JAMR_IMPORTED_SETTINGS__=${json};try{localStorage.setItem('tumbal_refactor_v3',JSON.stringify(${json}))}catch{}</scr`+`ipt>\n`;if(html.includes('</head>'))html=html.replace('</head>',bootstrap+'</head>');else html=bootstrap+html;const blob=new Blob([html],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='index.html';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Latest index.html downloaded with current settings',3000);}catch(e){console.error(e);toast('Could not download latest index.html: '+(e.message||e),3500);}}
       refreshOfflineStatus(){const el=$('offlineCacheStatus');if(!el)return;if(LOCAL||!window.isSecureContext||!('serviceWorker' in navigator)||!('caches' in window)){el.textContent='Offline cache requires the GitHub Pages HTTPS version of the app.';return;}caches.open('jamr-tmbl-pryk-shell-v1').then(cache=>cache.match(new URL('./index.html',location.href).href)).then(hit=>{el.textContent=hit?'Offline cache available.':'Offline cache not yet saved.'}).catch(()=>{el.textContent='Offline cache status unavailable.'});}
       exportSettings(){try{const data={app:'jamr-tmbl-pryk',formatVersion:1,exportedAt:new Date().toISOString(),settings:this.cfg.d};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jamr-tmbl-pryk-settings.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Settings exported');}catch(e){console.error(e);toast('Could not export settings',2600);}}
-      async importSettings(file){try{const data=JSON.parse(await file.text());const incoming=data?.settings;if(!incoming||typeof incoming!=='object'||Array.isArray(incoming))throw new Error('Invalid settings file');const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');this.cfg.d={...DEFAULTS,...incoming};try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(this.cfg.d));}catch{}this.syncUI();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();toast('Settings imported');}catch(e){console.error(e);toast('Invalid settings file: '+(e.message||e),3200);}}
+      async importSettings(file){try{const data=JSON.parse(await file.text());const incoming=data?.settings;if(!incoming||typeof incoming!=='object'||Array.isArray(incoming))throw new Error('Invalid settings file');const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');this.cfg.d={...DEFAULTS,...incoming};if(!Object.prototype.hasOwnProperty.call(incoming,'ankiFormat')&&Object.prototype.hasOwnProperty.call(incoming,'ankiAvif'))this.cfg.d.ankiFormat=incoming.ankiAvif?'avif':'webp';delete this.cfg.d.ankiAvif;try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(this.cfg.d));}catch{}this.syncUI();if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();toast('Settings imported');}catch(e){console.error(e);toast('Invalid settings file: '+(e.message||e),3200);}}
       async enableOfflineCache(){const status=$('offlineCacheStatus');try{if(LOCAL||!window.isSecureContext||!('serviceWorker' in navigator)||!('caches' in window))throw new Error('Open the GitHub Pages HTTPS version to enable offline caching.');if(status)status.textContent='Fetching latest index.html from GitHub Pages…';const reg=await navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'});await reg.update().catch(()=>{});const latestUrl='https://nagefurin.github.io/jamr-tmbl-pryk/index.html';const response=await fetch(latestUrl,{cache:'no-store'});if(!response.ok)throw new Error('GitHub Pages returned HTTP '+response.status);const cache=await caches.open('jamr-tmbl-pryk-shell-v1');const indexUrl=new URL('./index.html',location.href).href;const rootUrl=new URL('./',location.href).href;await cache.put(new Request(indexUrl),response.clone());await cache.put(new Request(rootUrl),response.clone());const worker=reg.active||reg.waiting||reg.installing;if(worker)worker.postMessage({type:'CACHE_LATEST',url:latestUrl});if(status)status.textContent='Offline cache saved. Latest GitHub Pages index.html was fetched successfully.';toast('Offline cache refreshed',2200);}catch(e){console.error(e);if(status)status.textContent='Offline cache failed: '+(e.message||e);toast('Offline cache failed',3000);}}
       syncAnkiOptions(){const enabled=this.cfg.get('ankiTagEnabled'),custom=this.cfg.get('ankiTagType')==='__custom__';for(const id of ['optAnkiTagType','ankiTagTypeInput'])$(id).disabled=!enabled;for(const id of ['optAnkiTagCustom','ankiTagCustomInput'])$(id).disabled=!enabled||!custom;}
       syncUI(){for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')e.checked=this.cfg.get(key);else e.value=this.cfg.get(key)}$('optZoomValue').textContent=this.cfg.get('zoomLevel')+'%';$('optOcrDisplayValue').textContent=OCR_LABELS[this.cfg.get('ocrDisplay')];$('optOcrScaleValue').textContent=this.cfg.get('ocrScale')+'%';$('optOcrGroupGapValue').textContent=this.cfg.get('ocrGroupGap')+'%';$('txFontSize').value=this.cfg.get('txFontSize');$('btnDual').classList.toggle('selected',this.cfg.get('dualMode'));$('btnScroll').classList.toggle('selected',this.cfg.get('scrollMode'));this.syncAnkiOptions();this.indicators();}
-      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.ocrPreloadImages=clamp(Number(vals.ocrPreloadImages),0,20);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);this.cfg.patch(vals);if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();toast('Options applied')}
+      saveOptions(){const prevOcr=this.cfg.get('ocrUrl'),prevManga=this.cfg.get('mangaOcrUrl'),prevTx=this.cfg.get('txWsUrl');const vals={};for(const [key,id,t] of formMap(this.cfg)){const e=$(id);if(!e)continue;if(t==='b')vals[key]=e.checked;else if(t==='i'){const n=Number(e.value);vals[key]=Number.isFinite(n)?Math.trunc(n):this.cfg.get(key)}else if(t==='n'){const n=Number(e.value);vals[key]=Number.isFinite(n)?n:this.cfg.get(key)}else vals[key]=e.value}vals.webpQuality=clamp(Number(vals.webpQuality),1,100);vals.ocrPreloadImages=clamp(Number(vals.ocrPreloadImages),0,20);vals.avifCrf=clamp(Number(vals.avifCrf),1,63);vals.avifSpeed=clamp(Number(vals.avifSpeed),0,8);vals.jxlQuality=clamp(Number(vals.jxlQuality),1,100);vals.jxlEffort=clamp(Number(vals.jxlEffort),1,9);this.cfg.patch(vals);if(prevOcr!==this.cfg.get('ocrUrl'))this.ocr.client.close();if(prevManga!==this.cfg.get('mangaOcrUrl'))this.ocr.secondClient.close();if(this.ocr.has())this.ocr.overlay.refreshModes(this.renderer.frame);if(prevTx!==this.cfg.get('txWsUrl'))this.tx.reconnect();this.tx.apply();this.hide('optionsModal');this.syncUI();toast('Options applied')}
       openAnki(){if(!this.loader.count)return;this.show('ankiModal');$('ankiError').style.display='none';for(const [key,id,t] of [['ankiField','ankiFieldInput','s'],['ankiMiscField','ankiMiscFieldInput','s'],['ankiTagType','ankiTagTypeInput','s'],['ankiTagCustom','ankiTagCustomInput','s'],['ankiTagEnabled','ankiTagEnabledInput','b'],['ankiResize','ankiResizeInput','b'],['nsfwTag','ankiNsfwInput','b']]){const e=$(id);e[t==='b'?'checked':'value']=this.cfg.get(key)}this.syncAnkiOptions();$('ankiSentenceInput').value=this.ocr.getSelectedSentence()||'';const pv=$('ankiPreview');pv.innerHTML='';const i=this.nav.idx,cover=this.cfg.get('coverSingle')&&i===0,last=i===this.loader.count-1,combined=this.cfg.get('publisherCombinedDetect')?(this.loader.publisherCombined||new Set()):new Set(),singleByResolution=combined.has(i)||combined.has(i+1);if(this.cfg.get('dualMode')&&!cover&&!last&&!singleByResolution){const order=this.cfg.get('japaneseMode')?[i+1,i]:[i,i+1];for(const n of order){const m=document.createElement('img');m.src=this.loader.get(n);pv.appendChild(m)}}else{const m=document.createElement('img');m.src=this.loader.get(i);pv.appendChild(m)}$('ankiMiscContent').textContent=`Source: ${this.loader.title}`}
       async updateAnki(){
         try{
@@ -1771,6 +1788,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 AI MAINTAINER NOTES
 - AI UPDATE RULE (MANDATORY): Any AI modifying this HTML must update this notes section in the same change. Do not ask the user for permission to update notes. Add a new Version History entry describing implemented changes, fixes, and known limitations. Never claim a feature exists unless it is actually implemented in code.
 - VERSION HISTORY:
+  - v56: Added JXL as an optional Anki image format alongside WebP and AVIF, including quality/effort options, deterministic .jxl media naming, legacy AVIF-setting migration, .jxl input recognition, and JXL encoding through the existing localhost helper.
   - v55: Restored F/button fullscreen to the browser Fullscreen API so the reader visibly enters true browser fullscreen again; browser-managed Escape exit remains standard Fullscreen behavior.
   - v53: Made OCR group keys stable across relayouts so a left-click-opened OCR group keeps its active state while incremental MangaOCR (7441) results update the underlying text.
   - v52: Kept completed cached/preloaded MangaOCR results from being redundantly sent through the 7441 refinement stream; only fresh first-pass results start incremental refinement.
