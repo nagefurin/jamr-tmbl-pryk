@@ -71,6 +71,14 @@ For AnkiConnect, allow requests from the reader's origin in AnkiConnect's CORS s
 
 ## GitHub Pages
 
-The workflow in .github/workflows/deploy-pages.yml builds the project and deploys dist/ when main is updated or the workflow is manually run. In repository settings, set Pages → Build and deployment → Source to GitHub Actions.
+The build check runs automatically on every push to main. Deployment is kept as a separate manual workflow so the repository can be built and checked even before Pages has been enabled.
 
-GitHub Pages deployment uses the repository subpath /jamr-tmbl-pryk/; the Vite config switches to this base path in Actions.
+To publish:
+
+1. Open the repository's **Settings → Pages**.
+2. Under **Build and deployment → Source**, select **GitHub Actions**.
+3. Open **Actions → Deploy GitHub Pages** and select **Run workflow**.
+
+The deployment workflow publishes the Vite dist/ output. Vite uses the repository subpath /jamr-tmbl-pryk/ when running in GitHub Actions.
+
+GitHub Pages is currently not enabled for this repository. Its initial activation must be done in repository Settings. The configure-pages action's automated enablement requires a separate token with repository administration/Pages permissions, not the workflow's built-in GITHUB_TOKEN.
