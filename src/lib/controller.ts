@@ -275,7 +275,10 @@ export class ReaderController {
       input.value = "";
     });
     on("txReconnect", "click", () => this.texthooker.reconnect());
-    on("txClose", "click", () => this.texthooker.close());
+    on("txClose", "click", () => {
+      this.$("txOverlay").classList.remove("active");
+      this.texthooker.close();
+    });
     on("txReverseBtn", "click", () => this.texthooker.toggleReverse());
     on("txAlignBtn", "click", () => this.texthooker.toggleAlign());
     on("txFontSize", "input", () => {
@@ -620,7 +623,7 @@ export class ReaderController {
         worker.postMessage({ type: "CACHE_LATEST", url: new URL("./", location.href).href });
       }
       await caches.open("jamr-tmbl-pryk-app-v2").then((cache) => cache.add(new Request(new URL("./", location.href).href, { cache: "reload" })));
-      status.textContent = "Offline app shell refreshed. Core scripts and styles will be cached as they load.";
+      status.textContent = "Offline app shell and referenced scripts/styles cached.";
       ReaderController.toast("Offline cache refreshed", 2200);
     } catch (error) {
       console.error(error);
