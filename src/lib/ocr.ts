@@ -17,8 +17,8 @@ type OcrPayload = Record<string, any> & {
   _twoPassTexts?: Array<string | null>;
 };
 
-function resultPayload(value: any): OcrPayload {
-  return (value?.result ?? value?.ocr_result ?? value?.data ?? value) as OcrPayload;
+function resultPayload(value: any): OcrPayload | string {
+  return value?.result ?? value?.ocr_result ?? value?.data ?? value;
 }
 
 function textFromResult(value: any): string {

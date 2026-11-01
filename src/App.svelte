@@ -24,7 +24,7 @@
         This app needs to run from a local web server or HTTPS. Start it with npm run dev.
       </div>
       <input id="fileInput" class="file-input-hidden" type="file" accept=".zip,.cbz,.epub,.jpg,.jpeg,.png,.webp,.gif,.bmp,.avif,.jxl" multiple />
-      <input id="folderInput" class="file-input-hidden" type="file" webkitdirectory directory multiple />
+      <input id="folderInput" class="file-input-hidden" type="file" webkitdirectory multiple />
       <div id="dropZone" class="drop-zone" role="button" tabindex="0">
         <div class="drop-zone-icon" aria-hidden="true">▧</div>
         <div class="drop-zone-title">Drop manga files, archives, or a folder</div>

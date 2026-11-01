@@ -86,8 +86,9 @@ export class AnkiConnector {
     });
     let response: Response;
     try {
+      const body = new Uint8Array(bytes).buffer;
       response = await fetch("http://127.0.0.1:7332/encode?" + params.toString(), {
-        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: bytes
+        method: "POST", headers: { "Content-Type": "application/octet-stream" }, body
       });
     } catch {
       throw new Error("AVIF/JXL helper is not running. Start tmbl-helper.py first.");
