@@ -25,6 +25,9 @@ export class PageNavigation {
     }
     const step = this.shouldShowSingle(this.idx) ? 1 : 2;
     if (this.idx + step < this.total) { this.idx += step; return true; }
+    // The current two-page spread already includes the final image. Do not
+    // advance to that same image again as a separate page.
+    if (step === 2 && this.idx + 1 === this.total - 1) return false;
     if (this.idx < this.total - 1) { this.idx = this.total - 1; return true; }
     return false;
   }
